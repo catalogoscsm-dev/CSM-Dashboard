@@ -1,7 +1,7 @@
 import { useDashboardStore } from '../store/useDashboardStore'
 import type { AppTab } from '../types'
 
-const TABS: { id: AppTab; label: string; icon: React.ReactNode }[] = [
+const TABS: { id: AppTab; label: string; icon: React.ReactNode; gerencialOnly?: boolean }[] = [
   {
     id: 'dashboard',
     label: 'Dashboard',
@@ -41,6 +41,16 @@ const TABS: { id: AppTab; label: string; icon: React.ReactNode }[] = [
     ),
   },
   {
+    id: 'gerencial',
+    label: 'Gerencial',
+    gerencialOnly: true,
+    icon: (
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+        <path d="M22 12h-4l-3 9L9 3l-3 9H2"/>
+      </svg>
+    ),
+  },
+  {
     id: 'tutorial',
     label: 'Ajuda',
     icon: (
@@ -57,6 +67,7 @@ export default function TabBar() {
   const activeTab = useDashboardStore((s) => s.activeTab)
   const setActiveTab = useDashboardStore((s) => s.setActiveTab)
   const report = useDashboardStore((s) => s.report)
+  const gerencial = useDashboardStore((s) => s.gerencial)
   const categories = report?.categories ?? []
 
   const returnCount = categories
@@ -81,7 +92,14 @@ export default function TabBar() {
       }}>
         {TABS.map((tab) => {
           const isActive = activeTab === tab.id
-          const isDisabled = !report && tab.id !== 'tutorial'
+          // Gerencial: habilitada somente quando gerencial !== null
+          // Tutorial: sempre habilitada
+          // Demais: habilitadas quando report !== null
+          let isDisabled = false
+          if (tab.id === 'tutorial') isDisabled = false
+          else if (tab.gerencialOnly) isDisabled = !gerencial
+          else isDisabled = !report
+
           const showBadge = tab.id === 'devolucoes' && returnCount > 0
 
           return (

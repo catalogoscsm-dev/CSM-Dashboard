@@ -1,12 +1,15 @@
 import { useRef, useState, useCallback } from 'react'
 import { useDashboardStore } from '../store/useDashboardStore'
 import { readFileAsWindows1252 } from '../utils/parser'
+import { detectReportType } from '../utils/parserGerencial'
 import CsmLogo from './CsmLogo'
 import { fmtBRL } from '../utils/format'
 
 export default function ImportScreen() {
   const loadReport = useDashboardStore((s) => s.loadReport)
+  const loadGerencial = useDashboardStore((s) => s.loadGerencial)
   const history = useDashboardStore((s) => s.history)
+  const activeCompanyId = useDashboardStore((s) => s.activeCompanyId)
   const loadFromHistory = useDashboardStore((s) => s.loadFromHistory)
   const setActiveTab = useDashboardStore((s) => s.setActiveTab)
   const [dragging, setDragging] = useState(false)
@@ -23,13 +26,15 @@ export default function ImportScreen() {
     setError(null)
     try {
       const html = await readFileAsWindows1252(file)
-      loadReport(html)
+      const type = detectReportType(html)
+      if (type === 'gerencial') loadGerencial(html)
+      else loadReport(html)
     } catch {
       setError('Erro ao ler o arquivo. Tente novamente.')
     } finally {
       setLoading(false)
     }
-  }, [loadReport])
+  }, [loadReport, loadGerencial])
 
   const onDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault()
@@ -55,6 +60,11 @@ export default function ImportScreen() {
       setLoading(false)
     }
   }
+
+  // Filtra histórico pela empresa ativa (ou mostra tudo se ainda não há empresa ativa)
+  const filteredHistory = activeCompanyId
+    ? history.filter((e) => e.companyId === activeCompanyId)
+    : history
 
   return (
     <div style={{
@@ -122,7 +132,7 @@ export default function ImportScreen() {
           Arraste o relatório <span style={{ color: 'var(--gold)', fontWeight: 700 }}>.HTM</span> do Vinhasoft aqui
         </p>
         <p style={{ color: 'var(--text-on-dark)', opacity: 0.5, fontSize: '13px' }}>
-          ou clique para selecionar o arquivo
+          ou clique para selecionar (Vendas ou Gerencial)
         </p>
         <input
           ref={inputRef}
@@ -165,7 +175,7 @@ export default function ImportScreen() {
         Carregar exemplo (Agosto 2026)
       </button>
 
-      {history.length > 0 && (
+      {filteredHistory.length > 0 && (
         <div style={{
           width: '100%',
           maxWidth: '480px',
@@ -175,7 +185,7 @@ export default function ImportScreen() {
             Relatórios recentes
           </p>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-            {history.slice(0, 5).map((entry) => (
+            {filteredHistory.slice(0, 5).map((entry) => (
               <button
                 key={entry.id}
                 onClick={() => loadFromHistory(entry.id)}
