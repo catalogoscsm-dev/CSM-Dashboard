@@ -68,6 +68,7 @@ export default function TabBar() {
   const setActiveTab = useDashboardStore((s) => s.setActiveTab)
   const report = useDashboardStore((s) => s.report)
   const gerencial = useDashboardStore((s) => s.gerencial)
+  const gerencialViews = useDashboardStore((s) => s.gerencialViews)
   const categories = report?.categories ?? []
 
   const returnCount = categories
@@ -97,7 +98,7 @@ export default function TabBar() {
           // Demais: habilitadas quando report !== null
           let isDisabled = false
           if (tab.id === 'tutorial') isDisabled = false
-          else if (tab.gerencialOnly) isDisabled = !gerencial
+          else if (tab.gerencialOnly) isDisabled = !gerencial && Object.keys(gerencialViews).length === 0
           else isDisabled = !report
 
           const showBadge = tab.id === 'devolucoes' && returnCount > 0

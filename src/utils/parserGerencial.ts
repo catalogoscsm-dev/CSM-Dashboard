@@ -1,10 +1,12 @@
 import type { GerencialData } from '../types'
 
+import { detectGerencialViewType } from './parserGerencialViews'
+
 // ── Detecta tipo de relatório ─────────────────────────────────────────────
 export function detectReportType(html: string): 'vendas' | 'gerencial' | 'gerencialView' {
+  // Delega ao parser especializado — evita falsos positivos como "Agrupado por Grupo" do relatório de vendas
+  if (detectGerencialViewType(html) !== null) return 'gerencialView'
   const lower = html.toLowerCase()
-  // Visão detalhada gerencial ("Agrupado por Clientes" etc.) — detecta antes do geral
-  if (lower.includes('agrupado por')) return 'gerencialView'
   if (lower.includes('relat') && lower.includes('gerencial')) return 'gerencial'
   if (lower.includes('tulos em aberto') || lower.includes('valor recebido')) return 'gerencial'
   return 'vendas'
