@@ -16,7 +16,8 @@
     "html-react-parser": "^5.1.18",
     "jspdf": "^2.5.1",
     "html2canvas": "^1.4.1",
-    "xlsx": "^0.18.5"
+    "xlsx": "^0.18.5",
+    "xlsx-js-style": "^1.2.0"
   },
   "devDependencies": {
     "@types/react": "^18.3.3",
