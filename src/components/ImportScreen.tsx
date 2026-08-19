@@ -8,6 +8,7 @@ import { fmtBRL } from '../utils/format'
 export default function ImportScreen() {
   const loadReport = useDashboardStore((s) => s.loadReport)
   const loadGerencial = useDashboardStore((s) => s.loadGerencial)
+  const loadGerencialView = useDashboardStore((s) => s.loadGerencialView)
   const history = useDashboardStore((s) => s.history)
   const activeCompanyId = useDashboardStore((s) => s.activeCompanyId)
   const loadFromHistory = useDashboardStore((s) => s.loadFromHistory)
@@ -27,14 +28,15 @@ export default function ImportScreen() {
     try {
       const html = await readFileAsWindows1252(file)
       const type = detectReportType(html)
-      if (type === 'gerencial') loadGerencial(html)
+      if (type === 'gerencialView') loadGerencialView(html)
+      else if (type === 'gerencial') loadGerencial(html)
       else loadReport(html)
     } catch {
       setError('Erro ao ler o arquivo. Tente novamente.')
     } finally {
       setLoading(false)
     }
-  }, [loadReport, loadGerencial])
+  }, [loadReport, loadGerencial, loadGerencialView])
 
   const onDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault()
@@ -132,7 +134,7 @@ export default function ImportScreen() {
           Arraste o relatório <span style={{ color: 'var(--gold)', fontWeight: 700 }}>.HTM</span> do Vinhasoft aqui
         </p>
         <p style={{ color: 'var(--text-on-dark)', opacity: 0.5, fontSize: '13px' }}>
-          ou clique para selecionar (Vendas ou Gerencial)
+          ou clique para selecionar (Vendas, Gerencial ou Visão detalhada)
         </p>
         <input
           ref={inputRef}
