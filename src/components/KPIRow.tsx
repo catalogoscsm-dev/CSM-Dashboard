@@ -1,26 +1,9 @@
-import { useEffect, useRef, useState } from 'react'
 import type { ReportData } from '../types'
 import { fmtBRL, fmtPct, fmtQty } from '../utils/format'
+import { useCountUp } from '../utils/animations'
 
 interface Props {
   report: ReportData
-}
-
-function useCountUp(target: number, duration = 900) {
-  const [value, setValue] = useState(0)
-  const frame = useRef<number>(0)
-  useEffect(() => {
-    const start = performance.now()
-    const tick = (now: number) => {
-      const progress = Math.min((now - start) / duration, 1)
-      const ease = 1 - Math.pow(1 - progress, 3)
-      setValue(target * ease)
-      if (progress < 1) frame.current = requestAnimationFrame(tick)
-    }
-    frame.current = requestAnimationFrame(tick)
-    return () => cancelAnimationFrame(frame.current)
-  }, [target, duration])
-  return value
 }
 
 function KPICard({
@@ -50,16 +33,18 @@ function KPICard({
       flex: '1 1 180px',
       minWidth: '160px',
       animation: `fadeSlideUp 0.5s ease ${delay}ms both`,
-      transition: 'box-shadow 0.2s ease, transform 0.2s ease',
+      transition: 'box-shadow 0.25s ease, transform 0.2s ease, border-color 0.25s ease',
       cursor: 'default',
     }}
     onMouseEnter={(e) => {
-      e.currentTarget.style.boxShadow = 'var(--shadow-md)'
+      e.currentTarget.style.boxShadow = `var(--shadow-md), 0 4px 16px ${color}28`
       e.currentTarget.style.transform = 'translateY(-2px)'
+      e.currentTarget.style.borderColor = color + '66'
     }}
     onMouseLeave={(e) => {
       e.currentTarget.style.boxShadow = 'var(--shadow-sm)'
       e.currentTarget.style.transform = 'translateY(0)'
+      e.currentTarget.style.borderColor = 'var(--border)'
     }}
     >
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>

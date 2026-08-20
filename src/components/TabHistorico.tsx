@@ -41,18 +41,26 @@ function HistoryCard({ entry, onLoad, onDelete, onLabelChange }: {
     day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit',
   })
 
+  const [hov, setHov] = useState(false)
   return (
-    <div style={{
-      background: 'var(--surface)',
-      borderRadius: 'var(--radius-md)',
-      padding: '16px 20px',
-      border: '1px solid var(--border)',
-      display: 'flex',
-      alignItems: 'center',
-      gap: '16px',
-      flexWrap: 'wrap',
-      animation: 'fadeSlideUp 0.35s ease both',
-    }}>
+    <div
+      onMouseEnter={() => setHov(true)}
+      onMouseLeave={() => setHov(false)}
+      style={{
+        background: 'var(--surface)',
+        borderRadius: 'var(--radius-md)',
+        padding: '16px 20px',
+        border: `1px solid ${hov ? 'var(--gold)88' : 'var(--border)'}`,
+        display: 'flex',
+        alignItems: 'center',
+        gap: '16px',
+        flexWrap: 'wrap',
+        animation: 'fadeSlideUp 0.35s ease both',
+        transition: 'border-color 0.25s, box-shadow 0.25s, transform 0.2s',
+        boxShadow: hov ? '0 4px 18px rgba(201,168,76,0.18)' : 'none',
+        transform: hov ? 'translateY(-1px)' : 'translateY(0)',
+        cursor: 'default',
+      }}>
       <div style={{ flex: 1, minWidth: '160px' }}>
         {editing ? (
           <input

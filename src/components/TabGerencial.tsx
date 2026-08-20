@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { useCountUp } from '../utils/animations'
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell,
   PieChart, Pie,
@@ -774,64 +775,81 @@ function buildViewInsights(view: GerencialView): Insight[] {
   return out
 }
 
-// ── KpiStrip expandida (4 → 6-7 KPIs) ───────────────────────────────────
+// ── KpiStrip expandida (4 → 6-7 KPIs) com count-up e hover ──────────────
+type GKpiAccent = 'positive' | 'negative' | 'warning' | 'neutral'
+const GKPI_COLORS: Record<GKpiAccent, string> = {
+  positive: 'var(--positive)', negative: 'var(--negative)',
+  warning: 'var(--warning)', neutral: 'var(--text)',
+}
+const GKPI_BGS: Record<GKpiAccent, string> = {
+  positive: 'rgba(16,185,129,0.06)', negative: 'rgba(244,63,94,0.06)',
+  warning: 'rgba(245,158,11,0.06)', neutral: 'var(--surface-2)',
+}
+
+function GKpiCard({ label, rawValue, format, accent }: {
+  label: string; rawValue: number; format: (v: number) => string; accent: GKpiAccent
+}) {
+  const animated = useCountUp(rawValue)
+  const [hovered, setHovered] = useState(false)
+  const color = GKPI_COLORS[accent]
+  const borderBase = accent === 'neutral' ? 'var(--border)' : color + '33'
+  const borderHov  = accent === 'neutral' ? color + '55' : color + '88'
+  return (
+    <div
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      style={{
+        background: GKPI_BGS[accent],
+        border: `1px solid ${hovered ? borderHov : borderBase}`,
+        borderRadius: 'var(--radius-md)', padding: '14px 18px',
+        display: 'flex', flexDirection: 'column', gap: '3px',
+        transition: 'border-color 0.25s, box-shadow 0.25s, transform 0.2s',
+        boxShadow: hovered ? `0 4px 16px ${color}22` : 'none',
+        transform: hovered ? 'translateY(-2px)' : 'translateY(0)',
+        cursor: 'default',
+      }}
+    >
+      <span style={{ fontSize: '10px', fontWeight: 700, color: 'var(--text-dim)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+        {label}
+      </span>
+      <span style={{ fontSize: '18px', fontWeight: 800, color, letterSpacing: '-0.3px' }}>
+        {format(animated)}
+      </span>
+    </div>
+  )
+}
+
 function KpiStrip({ rows }: { rows: GerencialViewRow[] }) {
-  const baseRows = rows.filter(r => !r.isSubgroup)  // evita dupla contagem em Linha de Produtos
-  const totalRev = baseRows.reduce((s, r) => s + r.revenue, 0)
+  const baseRows = rows.filter(r => !r.isSubgroup)
+  const totalRev    = baseRows.reduce((s, r) => s + r.revenue, 0)
   const totalOrders = baseRows.reduce((s, r) => s + (r.orders ?? 0), 0)
-  const totalItems = baseRows.reduce((s, r) => s + r.items, 0)
+  const totalItems  = baseRows.reduce((s, r) => s + r.items, 0)
 
   const marginRows = baseRows.filter(r => r.revenue > 0)
-  const avgMargin = marginRows.length > 0
-    ? marginRows.reduce((s, r) => s + r.margin, 0) / marginRows.length
-    : 0
+  const avgMargin  = marginRows.length > 0 ? marginRows.reduce((s, r) => s + r.margin, 0) / marginRows.length : 0
 
-  const ticketMedio = totalOrders > 0 ? totalRev / totalOrders : 0
+  const ticketMedio  = totalOrders > 0 ? totalRev / totalOrders : 0
   const deficitCount = rows.filter(r => r.revenue < 0).length
 
   const classARevenue = baseRows.filter(r => r.abcClass === 'A' && r.revenue > 0).reduce((s, r) => s + r.revenue, 0)
-  const posRevenue = baseRows.filter(r => r.revenue > 0).reduce((s, r) => s + r.revenue, 0)
-  const concABC = posRevenue > 0 ? (classARevenue / posRevenue) * 100 : 0
+  const posRevenue    = baseRows.filter(r => r.revenue > 0).reduce((s, r) => s + r.revenue, 0)
+  const concABC       = posRevenue > 0 ? (classARevenue / posRevenue) * 100 : 0
 
-  type Accent = 'positive' | 'negative' | 'warning' | 'neutral'
-  const marginAccent: Accent = avgMargin >= 120 ? 'positive' : avgMargin >= 80 ? 'warning' : 'negative'
+  const marginAccent: GKpiAccent = avgMargin >= 120 ? 'positive' : avgMargin >= 80 ? 'warning' : 'negative'
 
-  const kpis: Array<{ label: string; value: string; accent: Accent }> = [
-    { label: 'Faturamento Total', value: fmtBRL(totalRev), accent: 'positive' },
-    { label: 'Total de Pedidos',  value: totalOrders > 0 ? fmtQty(totalOrders) : '—', accent: 'neutral' },
-    { label: 'Qtd. de Itens',     value: fmtQty(totalItems), accent: 'neutral' },
-    { label: 'Margem Média',      value: fmtPct(avgMargin), accent: marginAccent },
-    ...(ticketMedio > 0 ? [{ label: 'Ticket Médio', value: fmtBRL(ticketMedio), accent: 'neutral' as Accent }] : []),
-    ...(deficitCount > 0 ? [{ label: 'Em déficit', value: `${deficitCount} ${deficitCount === 1 ? 'item' : 'itens'}`, accent: 'negative' as Accent }] : []),
-    ...(concABC > 0 ? [{ label: 'Classe A concentra', value: fmtPct(concABC), accent: 'neutral' as Accent }] : []),
+  const kpis: Array<{ label: string; rawValue: number; format: (v: number) => string; accent: GKpiAccent }> = [
+    { label: 'Faturamento Total', rawValue: totalRev,    format: fmtBRL,  accent: 'positive' },
+    { label: 'Total de Pedidos',  rawValue: totalOrders, format: (v) => totalOrders === 0 ? '—' : fmtQty(Math.round(v)), accent: 'neutral' },
+    { label: 'Qtd. de Itens',     rawValue: totalItems,  format: (v) => fmtQty(Math.round(v)), accent: 'neutral' },
+    { label: 'Margem Média',      rawValue: avgMargin,   format: fmtPct,  accent: marginAccent },
+    ...(ticketMedio > 0  ? [{ label: 'Ticket Médio',      rawValue: ticketMedio,  format: fmtBRL, accent: 'neutral' as GKpiAccent }] : []),
+    ...(deficitCount > 0 ? [{ label: 'Em déficit',        rawValue: deficitCount, format: (v: number) => { const n = Math.round(v); return `${n} ${n === 1 ? 'item' : 'itens'}` }, accent: 'negative' as GKpiAccent }] : []),
+    ...(concABC > 0      ? [{ label: 'Classe A concentra', rawValue: concABC,     format: fmtPct, accent: 'neutral' as GKpiAccent }] : []),
   ]
-
-  const COLORS: Record<Accent, string> = {
-    positive: 'var(--positive)', negative: 'var(--negative)',
-    warning: 'var(--warning)', neutral: 'var(--text)',
-  }
-  const BGS: Record<Accent, string> = {
-    positive: 'rgba(16,185,129,0.06)', negative: 'rgba(244,63,94,0.06)',
-    warning: 'rgba(245,158,11,0.06)', neutral: 'var(--surface-2)',
-  }
 
   return (
     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: '10px', marginBottom: '20px' }}>
-      {kpis.map((kpi) => (
-        <div key={kpi.label} style={{
-          background: BGS[kpi.accent],
-          border: `1px solid ${kpi.accent === 'neutral' ? 'var(--border)' : COLORS[kpi.accent] + '33'}`,
-          borderRadius: 'var(--radius-md)', padding: '14px 18px',
-          display: 'flex', flexDirection: 'column', gap: '3px',
-        }}>
-          <span style={{ fontSize: '10px', fontWeight: 700, color: 'var(--text-dim)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-            {kpi.label}
-          </span>
-          <span style={{ fontSize: '18px', fontWeight: 800, color: COLORS[kpi.accent], letterSpacing: '-0.3px' }}>
-            {kpi.value}
-          </span>
-        </div>
-      ))}
+      {kpis.map((kpi) => <GKpiCard key={kpi.label} {...kpi} />)}
     </div>
   )
 }
@@ -949,7 +967,7 @@ function ViewTable({ rows, isLinhasProdutos = false }: { rows: GerencialViewRow[
                   : idx % 2 === 0 ? 'var(--surface)' : 'var(--surface-2)'
               return (
                 <tr key={idx} onMouseEnter={() => setHovered(idx)} onMouseLeave={() => setHovered(null)}
-                  style={{ background: rowBg }}>
+                  style={{ background: rowBg, animation: `fadeSlideUp 0.2s ease ${Math.min(idx, 14) * 25}ms both` }}>
                   <td style={{ ...tdStyle(), textAlign: 'center', color: 'var(--text-muted)', fontSize: '12px' }}>{idx + 1}</td>
                   <td style={{ ...tdStyle(), textAlign: 'center' }}>
                     {!row.isSubgroup && (

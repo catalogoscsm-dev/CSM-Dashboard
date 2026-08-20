@@ -1,4 +1,6 @@
+import { useState } from 'react'
 import { useDashboardStore } from '../store/useDashboardStore'
+import { useCountUp } from '../utils/animations'
 import { fmtBRL, fmtPct, truncate } from '../utils/format'
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell,
@@ -28,6 +30,79 @@ function EmptyState() {
       <div style={{ fontSize: '13px', color: 'var(--text-muted)' }}>
         Todos os itens foram vendidos sem retorno.
       </div>
+    </div>
+  )
+}
+
+function ImpactNumbers({ returnValue, returnProfit, avgTicket }: {
+  returnValue: number; returnProfit: number; avgTicket: number
+}) {
+  const animVal = useCountUp(returnValue)
+  const animProfit = useCountUp(returnProfit)
+  const animTicket = useCountUp(avgTicket)
+  return (
+    <div style={{ display: 'flex', gap: '40px', flexWrap: 'wrap' }}>
+      {[
+        { label: 'Receita Perdida', value: `−${fmtBRL(animVal)}`, color: 'var(--negative)' },
+        { label: 'Lucro Perdido',   value: `−${fmtBRL(animProfit)}`, color: 'var(--negative)' },
+        { label: 'Ticket Médio de Devolução', value: fmtBRL(animTicket), color: 'var(--warning)' },
+      ].map(({ label, value, color }) => (
+        <div key={label}>
+          <div style={{ fontSize: '11px', color: 'var(--text-dim)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '4px' }}>
+            {label}
+          </div>
+          <div style={{ fontSize: '28px', fontWeight: 800, fontFamily: 'var(--font-mono)', color }}>
+            {value}
+          </div>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+function DevKpiCard({ label, rawValue, format, color, bg, delay }: {
+  label: string; rawValue: number; format: (v: number) => string
+  color: string; bg: string; delay: number
+}) {
+  const anim = useCountUp(rawValue)
+  const [hovered, setHovered] = useState(false)
+  return (
+    <div
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      style={{
+        flex: '1 1 200px', background: 'var(--surface)',
+        borderRadius: 'var(--radius-md)', padding: '20px',
+        boxShadow: hovered ? `var(--shadow-md), 0 4px 16px ${color}28` : 'var(--shadow-sm)',
+        border: `1px solid ${hovered ? color + '66' : 'var(--border)'}`,
+        animation: `fadeSlideUp 0.4s ease ${delay}ms both`,
+        transition: 'box-shadow 0.25s, border-color 0.25s, transform 0.2s',
+        transform: hovered ? 'translateY(-2px)' : 'translateY(0)',
+        cursor: 'default',
+      }}>
+      <div style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-dim)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '10px' }}>
+        {label}
+      </div>
+      <div style={{ fontSize: '26px', fontWeight: 800, color, fontFamily: 'var(--font-mono)', lineHeight: 1, background: bg, borderRadius: '6px', padding: '6px 10px', display: 'inline-block' }}>
+        {format(anim)}
+      </div>
+    </div>
+  )
+}
+
+function DevKpiCards({ totalReturnValue, returnCount, returnRate }: {
+  totalReturnValue: number; returnCount: number; returnRate: number
+}) {
+  const negColor = 'var(--negative)'
+  const warnColor = returnRate > 10 ? 'var(--negative)' : 'var(--warning)'
+  return (
+    <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap' }}>
+      <DevKpiCard label="Valor Total Devolvido" rawValue={totalReturnValue}
+        format={(v) => `−${fmtBRL(v)}`} color={negColor} bg="var(--negative-bg)" delay={0} />
+      <DevKpiCard label="Qtd. Devoluções" rawValue={returnCount}
+        format={(v) => String(Math.round(v))} color={negColor} bg="var(--negative-bg)" delay={60} />
+      <DevKpiCard label="Taxa de Devolução" rawValue={returnRate}
+        format={fmtPct} color={warnColor} bg={returnRate > 10 ? 'var(--negative-bg)' : 'var(--warning-bg)'} delay={120} />
     </div>
   )
 }
@@ -84,31 +159,12 @@ export default function TabDevolucoes() {
 
   return (
     <div style={STYLE}>
-      {/* KPI cards */}
-      <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap' }}>
-        {[
-          { label: 'Valor Total Devolvido', value: `−${fmtBRL(totalReturnValue)}`, color: 'var(--negative)', bg: 'var(--negative-bg)' },
-          { label: 'Qtd. Devoluções', value: String(returns.length), color: 'var(--negative)', bg: 'var(--negative-bg)' },
-          { label: 'Taxa de Devolução', value: fmtPct(returnRate), color: returnRate > 10 ? 'var(--negative)' : 'var(--warning)', bg: returnRate > 10 ? 'var(--negative-bg)' : 'var(--warning-bg)' },
-        ].map((kpi) => (
-          <div key={kpi.label} style={{
-            flex: '1 1 200px',
-            background: 'var(--surface)',
-            borderRadius: 'var(--radius-md)',
-            padding: '20px',
-            boxShadow: 'var(--shadow-sm)',
-            border: '1px solid var(--border)',
-            animation: 'fadeSlideUp 0.4s ease both',
-          }}>
-            <div style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-dim)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '10px' }}>
-              {kpi.label}
-            </div>
-            <div style={{ fontSize: '26px', fontWeight: 800, color: kpi.color, fontFamily: 'var(--font-mono)', lineHeight: 1 }}>
-              {kpi.value}
-            </div>
-          </div>
-        ))}
-      </div>
+      {/* KPI cards — com count-up e hover */}
+      <DevKpiCards
+        totalReturnValue={totalReturnValue}
+        returnCount={returns.length}
+        returnRate={returnRate}
+      />
 
       {/* Chart + top list side by side */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
@@ -156,7 +212,7 @@ export default function TabDevolucoes() {
             {topReturns.map((p, i) => {
               const barPct = maxReturnValue > 0 ? (Math.abs(p.revenue) / maxReturnValue) * 100 : 0
               return (
-                <div key={p.code + i} style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+                <div key={p.code + i} style={{ display: 'flex', gap: '10px', alignItems: 'center', animation: `fadeSlideUp 0.22s ease ${i * 35}ms both` }}>
                   <span style={{ fontSize: '12px', fontWeight: 800, color: i === 0 ? 'var(--negative)' : 'var(--text-muted)', width: '18px', textAlign: 'right', flexShrink: 0 }}>
                     {i + 1}
                   </span>
@@ -190,32 +246,11 @@ export default function TabDevolucoes() {
         border: '1px solid var(--border)',
       }}>
         <h3 style={{ fontWeight: 700, fontSize: '14px', color: 'var(--text)', marginBottom: '16px' }}>Impacto Financeiro</h3>
-        <div style={{ display: 'flex', gap: '40px', flexWrap: 'wrap' }}>
-          <div>
-            <div style={{ fontSize: '11px', color: 'var(--text-dim)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '4px' }}>
-              Receita Perdida
-            </div>
-            <div style={{ fontSize: '28px', fontWeight: 800, fontFamily: 'var(--font-mono)', color: 'var(--negative)' }}>
-              −{fmtBRL(totalReturnValue)}
-            </div>
-          </div>
-          <div>
-            <div style={{ fontSize: '11px', color: 'var(--text-dim)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '4px' }}>
-              Lucro Perdido
-            </div>
-            <div style={{ fontSize: '28px', fontWeight: 800, fontFamily: 'var(--font-mono)', color: 'var(--negative)' }}>
-              −{fmtBRL(totalReturnProfit)}
-            </div>
-          </div>
-          <div>
-            <div style={{ fontSize: '11px', color: 'var(--text-dim)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '4px' }}>
-              Ticket Médio de Devolução
-            </div>
-            <div style={{ fontSize: '28px', fontWeight: 800, fontFamily: 'var(--font-mono)', color: 'var(--warning)' }}>
-              {fmtBRL(returns.length > 0 ? totalReturnValue / returns.length : 0)}
-            </div>
-          </div>
-        </div>
+        <ImpactNumbers
+          returnValue={totalReturnValue}
+          returnProfit={totalReturnProfit}
+          avgTicket={returns.length > 0 ? totalReturnValue / returns.length : 0}
+        />
       </div>
     </div>
   )

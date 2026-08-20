@@ -235,8 +235,9 @@ export default function ProductsTable({ categories }: Props) {
                 style={{
                   background: p.isReturn ? '#FFF1F2' : i % 2 === 0 ? 'var(--surface)' : 'var(--surface-2)',
                   transition: 'background 0.1s',
+                  animation: `fadeSlideUp 0.22s ease ${Math.min(i, 14) * 25}ms both`,
                 }}
-                onMouseEnter={(e) => (e.currentTarget.style.background = '#F0F9FF')}
+                onMouseEnter={(e) => (e.currentTarget.style.background = 'rgba(201,168,76,0.07)')}
                 onMouseLeave={(e) => (e.currentTarget.style.background = p.isReturn ? '#FFF1F2' : i % 2 === 0 ? 'var(--surface)' : 'var(--surface-2)')}
               >
                 <td style={tdStyle}>
