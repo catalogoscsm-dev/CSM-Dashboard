@@ -157,7 +157,7 @@ function MarginGauge({ pct }: { pct: number }) {
   const angle = Math.PI - fraction * Math.PI
   const ex = cx + r * Math.cos(angle)
   const ey = cy - r * Math.sin(angle)
-  const largeArc = fraction > 0.5 ? 1 : 0
+  const largeArc = 0
   const color = pct < 80 ? '#F43F5E' : pct < 120 ? '#F59E0B' : '#10B981'
   const label = pct < 80 ? 'Baixa' : pct < 120 ? 'Boa' : 'Excelente'
 
