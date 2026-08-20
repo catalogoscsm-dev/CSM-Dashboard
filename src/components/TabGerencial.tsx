@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell,
   PieChart, Pie,
@@ -148,53 +148,119 @@ function InsightsStrip({ insights }: { insights: Insight[] }) {
   )
 }
 
-// ── 2. Gauge de margem (SVG semicírculo) ──────────────────────────────────
+// ── 2. Gauge de margem (SVG semicírculo — animado, 3D, interativo) ─────────
 function MarginGauge({ pct }: { pct: number }) {
-  const displayPct = Math.min(Math.max(pct, 0), 200)
-  const fraction = displayPct / 200
-  const cx = 85, cy = 78, r = 58
-  // Semicírculo: ângulo vai de π (esquerda) até 0 (direita) no SVG
+  const [animFraction, setAnimFraction] = useState(0)
+  const [hovered, setHovered] = useState(false)
+
+  useEffect(() => {
+    const target = Math.min(Math.max(pct, 0), 200) / 200
+    let start: number | null = null
+    const duration = 1100
+
+    const tick = (ts: number) => {
+      if (start === null) start = ts
+      const t = Math.min((ts - start) / duration, 1)
+      const eased = 1 - Math.pow(1 - t, 3) // ease-out cubic
+      setAnimFraction(eased * target)
+      if (t < 1) requestAnimationFrame(tick)
+    }
+
+    const id = setTimeout(() => requestAnimationFrame(tick), 80)
+    return () => clearTimeout(id)
+  }, [pct])
+
+  const fraction = animFraction
+  const cx = 85, cy = 82, r = 58
   const angle = Math.PI - fraction * Math.PI
   const ex = cx + r * Math.cos(angle)
   const ey = cy - r * Math.sin(angle)
-  const largeArc = 0
-  const color = pct < 80 ? '#F43F5E' : pct < 120 ? '#F59E0B' : '#10B981'
-  const label = pct < 80 ? 'Baixa' : pct < 120 ? 'Boa' : 'Excelente'
+
+  const color     = pct < 80 ? '#F43F5E' : pct < 120 ? '#F59E0B' : '#10B981'
+  const colorSoft = pct < 80 ? '#FCA5A5' : pct < 120 ? '#FCD34D' : '#6EE7B7'
+  const label     = pct < 80 ? 'Baixa'   : pct < 120 ? 'Boa'      : 'Excelente'
 
   return (
-    <div style={{
-      background: 'var(--surface-2)', border: '1px solid var(--border)',
-      borderRadius: 'var(--radius-md)', padding: '20px 16px 12px',
-      display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px',
-    }}>
+    <div
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      style={{
+        background: 'var(--surface-2)',
+        border: `1px solid ${hovered ? color + '55' : 'var(--border)'}`,
+        borderRadius: 'var(--radius-md)', padding: '20px 16px 8px',
+        display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px',
+        transition: 'border-color 0.3s ease, box-shadow 0.3s ease',
+        boxShadow: hovered ? `0 6px 24px ${color}28` : 'none',
+        cursor: 'default',
+      }}
+    >
       <span style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-dim)', textTransform: 'uppercase', letterSpacing: '0.6px' }}>
         Margem de Lucro
       </span>
-      <svg width="170" height="100" viewBox="0 0 170 100">
-        {/* Zonas coloridas de fundo */}
-        <path d={`M 27,78 A 58,58 0 0,1 85,20`} stroke="#F43F5E" fill="none" strokeWidth="10" strokeLinecap="round" opacity="0.15"/>
-        <path d={`M 85,20 A 58,58 0 0,1 120,30`} stroke="#F59E0B" fill="none" strokeWidth="10" strokeLinecap="round" opacity="0.15"/>
-        <path d={`M 120,30 A 58,58 0 0,1 143,78`} stroke="#10B981" fill="none" strokeWidth="10" strokeLinecap="round" opacity="0.15"/>
-        {/* Track cinza */}
-        <path d={`M 27,78 A 58,58 0 0,1 143,78`} stroke="#e5e7eb" fill="none" strokeWidth="10" strokeLinecap="round"/>
-        {/* Arco de valor */}
-        {fraction > 0.01 && (
-          <path d={`M 27,78 A 58,58 0 ${largeArc},1 ${ex.toFixed(1)},${ey.toFixed(1)}`}
-            stroke={color} fill="none" strokeWidth="10" strokeLinecap="round"/>
+      <svg width="170" height="110" viewBox="0 0 170 110" style={{ overflow: 'visible' }}>
+        <defs>
+          {/* Gradiente segue o traço do arco: da cor suave à cor principal */}
+          <linearGradient id="mgGrad" x1="27" y1="82" x2="143" y2="24" gradientUnits="userSpaceOnUse">
+            <stop offset="0%" stopColor={colorSoft} />
+            <stop offset="100%" stopColor={color} />
+          </linearGradient>
+          {/* Glow — intensidade aumenta no hover */}
+          <filter id="mgGlow" x="-30%" y="-30%" width="160%" height="160%">
+            <feGaussianBlur stdDeviation={hovered ? '4' : '2'} result="blur" />
+            <feMerge>
+              <feMergeNode in="blur" />
+              <feMergeNode in="SourceGraphic" />
+            </feMerge>
+          </filter>
+          {/* Sombra suave do ponteiro */}
+          <filter id="mgDot" x="-50%" y="-50%" width="200%" height="200%">
+            <feDropShadow dx="0" dy="1" stdDeviation="2" floodColor={color} floodOpacity="0.5"/>
+          </filter>
+        </defs>
+
+        {/* Zonas de fundo (vermelho / amarelo / verde) */}
+        <path d={`M 27,82 A 58,58 0 0,1 85,24`}  stroke="#F43F5E" fill="none" strokeWidth="8" strokeLinecap="round" opacity="0.13"/>
+        <path d={`M 85,24 A 58,58 0 0,1 120,34`} stroke="#F59E0B" fill="none" strokeWidth="8" strokeLinecap="round" opacity="0.13"/>
+        <path d={`M 120,34 A 58,58 0 0,1 143,82`} stroke="#10B981" fill="none" strokeWidth="8" strokeLinecap="round" opacity="0.13"/>
+
+        {/* Track cinza base */}
+        <path d={`M 27,82 A 58,58 0 0,1 143,82`} stroke="var(--border)" fill="none" strokeWidth="8" strokeLinecap="round" opacity="0.6"/>
+
+        {/* Arco de valor com gradiente + glow */}
+        {fraction > 0.005 && (
+          <path
+            d={`M 27,82 A 58,58 0 0,1 ${ex.toFixed(2)},${ey.toFixed(2)}`}
+            stroke="url(#mgGrad)" fill="none" strokeWidth="8" strokeLinecap="round"
+            filter="url(#mgGlow)"
+          />
         )}
-        {/* Ponteiro */}
-        {fraction > 0.01 && (
-          <circle cx={ex.toFixed(1)} cy={ey.toFixed(1)} r="6" fill={color} stroke="white" strokeWidth="2"/>
+
+        {/* Ponteiro: halo + círculo principal + reflexo 3D */}
+        {fraction > 0.005 && (
+          <>
+            <circle cx={ex.toFixed(2)} cy={ey.toFixed(2)} r="11"
+              fill={color} opacity={hovered ? 0.2 : 0.12}
+              style={{ transition: 'opacity 0.3s' }} />
+            <circle cx={ex.toFixed(2)} cy={ey.toFixed(2)} r="7"
+              fill={color} stroke="white" strokeWidth="2.5"
+              filter="url(#mgDot)" />
+            <circle
+              cx={(ex - 1.5).toFixed(2)}
+              cy={(ey - 2).toFixed(2)}
+              r="2" fill="white" opacity="0.55" />
+          </>
         )}
-        {/* Labels zona */}
-        <text x="20" y="94" fontSize="9" fill="#9ca3af" textAnchor="middle">0%</text>
-        <text x="85" y="16" fontSize="9" fill="#9ca3af" textAnchor="middle">100%</text>
-        <text x="150" y="94" fontSize="9" fill="#9ca3af" textAnchor="middle">200%</text>
+
+        {/* Labels de zona — afastados do arco (top: y=8, fora do traço que termina em y≈24) */}
+        <text x="20"  y="98"  fontSize="9" fill="#9ca3af" textAnchor="middle">0%</text>
+        <text x="85"  y="10"  fontSize="9" fill="#9ca3af" textAnchor="middle">100%</text>
+        <text x="150" y="98"  fontSize="9" fill="#9ca3af" textAnchor="middle">200%</text>
+
         {/* Valor central */}
-        <text x="85" y="68" fontSize="24" fontWeight="800" fill={color} textAnchor="middle">
+        <text x="85" y="74" fontSize="23" fontWeight="800" fill={color} textAnchor="middle">
           {pct.toLocaleString('pt-BR', { maximumFractionDigits: 1 })}%
         </text>
-        <text x="85" y="84" fontSize="10" fontWeight="600" fill={color} textAnchor="middle">{label}</text>
+        <text x="85" y="89" fontSize="10" fontWeight="700" fill={color} textAnchor="middle">{label}</text>
       </svg>
     </div>
   )
