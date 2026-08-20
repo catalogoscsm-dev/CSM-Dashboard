@@ -22,9 +22,10 @@ const VIEW_PATTERNS: Array<{ pattern: string; type: GerencialViewType; label: st
   { pattern: 'agrupado por segmento',     type: 'segmento',      label: 'Segmento' },
   { pattern: 'agrupado por cidades',      type: 'cidades',       label: 'Cidades' },
   { pattern: 'agrupado por cidade',       type: 'cidades',       label: 'Cidades' },
-  // "Área" pode aparecer como "rea" por problema de charset windows-1252
-  { pattern: 'agrupado por rea',          type: 'area',          label: 'Área' },
+  // "Área" — windows-1252 decodificado corretamente produz "área"; fallbacks para outros casos
+  { pattern: 'agrupado por área',         type: 'area',          label: 'Área' },
   { pattern: 'agrupado por &aacute;rea',  type: 'area',          label: 'Área' },
+  { pattern: 'agrupado por rea',          type: 'area',          label: 'Área' },
   { pattern: 'agrupado por condi',        type: 'condicaoPgto',  label: 'Cond. de Pgto.' },
   { pattern: 'agrupado por fornecedor',   type: 'fornecedores',  label: 'Fornecedores' },
   { pattern: 'agrupado por supervisor',   type: 'supervisores',  label: 'Supervisores' },
@@ -74,12 +75,17 @@ export function parseGerencialViewHTML(html: string): GerencialView | null {
 
     const texts = tds.map((td) => (td.textContent ?? '').trim())
 
-    // Heurística: detecta se a 1ª coluna é código (número com ponto) ou nome direto
-    // Padrão com código: [código, nome, pedidos, itens, fat, custo, lucro$, lucro%, %total]
-    // Padrão sem código: [nome, pedidos, itens, fat, custo, lucro$, lucro%, %total]
+    // Subgrupo de Linha de Produtos: célula de nome usa font-face Verdana + <i>
+    const nameCell = tds[1] ?? tds[0]
+    const isSubgroup = !!(nameCell.querySelector('i') &&
+      (nameCell.querySelector('font[face="Verdana"]') || nameCell.querySelector('font[face="verdana"]')))
+
+    // Layout de colunas (todos os relatórios gerenciais têm código na col[0]):
+    // 9 cols: [código, nome, pedidos, itens, fat, custo, lucro$, lucro%, %total]
+    // 8 cols: [código, nome, itens, fat, custo, lucro$, lucro%, %total]  ← sem pedidos (Fornecedores, Linha)
     let code: string | undefined
     let name: string
-    let ordersStr: string
+    let ordersStr: string | undefined
     let itemsStr: string
     let revenueStr: string
     let costStr: string
@@ -87,17 +93,17 @@ export function parseGerencialViewHTML(html: string): GerencialView | null {
     let marginStr: string
     let pctStr: string
 
-    if (texts.length >= 9 && /^\d/.test(texts[0].replace('.', ''))) {
-      // 9 colunas com código
+    if (texts.length >= 9) {
+      // 9 colunas: código + nome + pedidos + itens + fat + custo + lucro$ + lucro% + %total
       ;[code, name, ordersStr, itemsStr, revenueStr, costStr, profitStr, marginStr, pctStr] = texts
-    } else if (texts.length >= 8) {
-      // 8 colunas sem código
-      ;[name, ordersStr, itemsStr, revenueStr, costStr, profitStr, marginStr, pctStr] = texts
+    } else if (texts.length === 8) {
+      // 8 colunas: código + nome + itens + fat + custo + lucro$ + lucro% + %total (sem pedidos)
+      ;[code, name, itemsStr, revenueStr, costStr, profitStr, marginStr, pctStr] = texts
     } else {
       continue
     }
 
-    // "2pd" → 2, "" → undefined
+    // "2pd" → 2, ausente → undefined
     const ordersMatch = ordersStr?.match(/(\d+)/)
     const orders = ordersMatch ? parseInt(ordersMatch[1], 10) : undefined
 
@@ -110,15 +116,17 @@ export function parseGerencialViewHTML(html: string): GerencialView | null {
 
     if (!name || revenue === 0) continue
 
-    rows.push({ code: code || undefined, name, orders, items, revenue, cost, profit, margin, pctTotal })
+    rows.push({ code: code || undefined, name, orders, items, revenue, cost, profit, margin, pctTotal, isSubgroup })
   }
 
-  // Ordena por revenue desc e calcula ABC
-  rows.sort((a, b) => b.revenue - a.revenue)
+  // Linha de Produtos preserva ordem hierárquica; demais ordenam por revenue desc
+  const keepOrder = detected.type === 'linhasProdutos'
+  if (!keepOrder) rows.sort((a, b) => b.revenue - a.revenue)
 
+  // ABC calculado sobre os grupos (não subgrupos) para Linha de Produtos
   let cumulative = 0
   const rowsWithAbc: GerencialViewRow[] = rows.map((r) => {
-    cumulative += r.pctTotal
+    if (!r.isSubgroup) cumulative += r.pctTotal
     const abcClass: 'A' | 'B' | 'C' = cumulative <= 75 ? 'A' : cumulative <= 95 ? 'B' : 'C'
     return { ...r, abcClass }
   })

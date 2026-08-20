@@ -97,6 +97,7 @@ export interface GerencialViewRow {
   margin: number      // lucro %
   pctTotal: number    // % do total
   abcClass: 'A' | 'B' | 'C'  // A≤75%, B≤95%, C>95% do acumulado
+  isSubgroup?: boolean // true para sublinhas de Linha de Produtos (Verdana italic)
 }
 
 export interface GerencialView {

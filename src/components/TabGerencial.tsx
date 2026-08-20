@@ -517,29 +517,251 @@ function GeralView({ g, goal }: { g: GerencialData; goal: MonthlyGoal }) {
 // VISÕES DETALHADAS — componentes
 // ═══════════════════════════════════════════════════════════════════════════
 
+// ── Insights automáticos contextuais por visão ────────────────────────────
+function buildViewInsights(view: GerencialView): Insight[] {
+  const rows = view.rows
+  if (rows.length === 0) return []
+  const out: Insight[] = []
+
+  const positive = rows.filter(r => r.revenue > 0)
+  const negative = rows.filter(r => r.revenue < 0)
+  const totalRev = positive.reduce((s, r) => s + r.revenue, 0)
+
+  // Concentração Pareto (top 3 > 50%)
+  if (positive.length >= 4 && totalRev > 0) {
+    const top3Rev = positive.slice(0, 3).reduce((s, r) => s + r.revenue, 0)
+    const top3Pct = (top3Rev / totalRev) * 100
+    if (top3Pct > 50) {
+      out.push({
+        level: top3Pct > 70 ? 'bad' : 'warn',
+        icon: '⚠️',
+        label: `Top 3 = ${fmtPct(top3Pct)} do faturamento`,
+        value: 'Risco de concentração',
+      })
+    }
+  }
+
+  // Itens com faturamento negativo (devoluções/cancelamentos)
+  if (negative.length > 0) {
+    const negSum = negative.reduce((s, r) => s + r.revenue, 0)
+    out.push({
+      level: 'bad',
+      icon: '↩️',
+      label: `${negative.length} ${negative.length === 1 ? 'item' : 'itens'} com devolução`,
+      value: fmtBRL(negSum),
+    })
+  }
+
+  // Outlier de margem altíssima (>200%) — possível erro de precificação
+  const highMargin = positive.filter(r => r.margin > 200)
+  if (highMargin.length > 0) {
+    const best = highMargin.reduce((a, b) => b.margin > a.margin ? b : a)
+    out.push({
+      level: 'warn',
+      icon: '🔍',
+      label: `Margem ${fmtPct(best.margin)} — verificar`,
+      value: best.name.length > 24 ? best.name.slice(0, 22) + '…' : best.name,
+    })
+  }
+
+  // Campeão isolado (1º > 2× o 2º em receita)
+  if (positive.length >= 2 && positive[1].revenue > 0) {
+    const ratio = positive[0].revenue / positive[1].revenue
+    if (ratio > 2) {
+      const n = positive[0].name
+      out.push({
+        level: 'warn',
+        icon: '🏆',
+        label: `${n.length > 20 ? n.slice(0, 18) + '…' : n} lidera com ${ratio.toFixed(1)}× o 2º`,
+        value: 'Dependência crítica',
+      })
+    }
+  }
+
+  // ── Insights específicos por tipo de visão ────────────────────────────
+
+  if (view.type === 'vendedores') {
+    const withOrders = rows.filter(r => r.orders && r.orders > 0 && r.revenue > 0)
+    if (withOrders.length > 0) {
+      const avgTicket = withOrders.reduce((s, r) => s + r.revenue / r.orders!, 0) / withOrders.length
+      const topTicket = withOrders.reduce((a, b) => (b.revenue / b.orders!) > (a.revenue / a.orders!) ? b : a)
+      const n = topTicket.name
+      out.push({
+        level: 'info',
+        icon: '🧾',
+        label: `Maior ticket: ${n.length > 18 ? n.slice(0, 16) + '…' : n}`,
+        value: `${fmtBRL(topTicket.revenue / topTicket.orders!)} (média ${fmtBRL(avgTicket)})`,
+      })
+    }
+    if (positive.length > 0) {
+      const bestMarginV = positive.reduce((a, b) => b.margin > a.margin ? b : a)
+      if (positive[0] && bestMarginV.name !== positive[0].name) {
+        const n = bestMarginV.name
+        out.push({
+          level: 'good',
+          icon: '📈',
+          label: `Maior eficiência: ${n.length > 20 ? n.slice(0, 18) + '…' : n}`,
+          value: `Margem ${fmtPct(bestMarginV.margin)}`,
+        })
+      }
+    }
+  }
+
+  if (view.type === 'clientes') {
+    const oneTime = rows.filter(r => r.orders === 1 && r.revenue > 0)
+    if (oneTime.length > 0 && positive.length > 0) {
+      const pct = (oneTime.length / positive.length) * 100
+      out.push({
+        level: pct > 60 ? 'warn' : 'info',
+        icon: '👤',
+        label: `${oneTime.length} clientes compraram apenas 1×`,
+        value: `${fmtPct(pct)} dos clientes`,
+      })
+    }
+  }
+
+  if (view.type === 'cidades' && positive.length > 0 && totalRev > 0) {
+    const top1Pct = (positive[0].revenue / totalRev) * 100
+    out.push({
+      level: top1Pct > 60 ? 'warn' : 'info',
+      icon: '📍',
+      label: `${positive[0].name} — ${fmtPct(top1Pct)} do faturamento`,
+      value: top1Pct > 60 ? 'Concentração geográfica alta' : 'Maior praça',
+    })
+  }
+
+  if (view.type === 'fornecedores' && positive.length > 0) {
+    const bestMarginF = positive.reduce((a, b) => b.margin > a.margin ? b : a)
+    const n = bestMarginF.name
+    out.push({
+      level: 'good',
+      icon: '🏭',
+      label: `Melhor margem: ${n.length > 20 ? n.slice(0, 18) + '…' : n}`,
+      value: fmtPct(bestMarginF.margin),
+    })
+    const lossSuppliers = rows.filter(r => r.profit < 0)
+    if (lossSuppliers.length > 0) {
+      out.push({
+        level: 'bad',
+        icon: '🔻',
+        label: `${lossSuppliers.length} fornecedor${lossSuppliers.length > 1 ? 'es' : ''} com lucro negativo`,
+        value: fmtBRL(lossSuppliers.reduce((s, r) => s + r.profit, 0)),
+      })
+    }
+  }
+
+  if (view.type === 'condicaoPgto') {
+    const sig = positive.filter(r => r.revenue > 100)
+    if (sig.length >= 2) {
+      const bestC = sig.reduce((a, b) => b.margin > a.margin ? b : a)
+      const worstC = sig.reduce((a, b) => b.margin < a.margin ? b : a)
+      if (bestC.name !== worstC.name) {
+        const gap = bestC.margin - worstC.margin
+        out.push({
+          level: gap > 30 ? 'warn' : 'info',
+          icon: '💳',
+          label: `Gap de margem ${fmtPct(gap)}`,
+          value: `${bestC.name.length > 10 ? bestC.name.slice(0, 9) + '…' : bestC.name} vs ${worstC.name.length > 10 ? worstC.name.slice(0, 9) + '…' : worstC.name}`,
+        })
+      }
+    }
+  }
+
+  if (view.type === 'linhasProdutos') {
+    const groups = rows.filter(r => !r.isSubgroup && r.revenue > 0)
+    if (groups.length > 0) {
+      const bestGroup = groups.reduce((a, b) => b.margin > a.margin ? b : a)
+      out.push({
+        level: 'good',
+        icon: '📦',
+        label: `Linha mais eficiente: ${bestGroup.name}`,
+        value: `Margem ${fmtPct(bestGroup.margin)}`,
+      })
+    }
+    const negSubs = rows.filter(r => r.isSubgroup && r.revenue < 0)
+    if (negSubs.length > 0) {
+      out.push({
+        level: 'bad',
+        icon: '🔻',
+        label: `${negSubs.length} sublinha${negSubs.length > 1 ? 's' : ''} com saldo negativo`,
+        value: fmtBRL(negSubs.reduce((s, r) => s + r.revenue, 0)),
+      })
+    }
+  }
+
+  if (view.type === 'segmento') {
+    const withOrd = positive.filter(r => r.orders && r.orders > 0)
+    if (withOrd.length > 0) {
+      const bestTicketSeg = withOrd.reduce((a, b) =>
+        (b.revenue / b.orders!) > (a.revenue / a.orders!) ? b : a
+      )
+      const n = bestTicketSeg.name
+      out.push({
+        level: 'info',
+        icon: '👥',
+        label: `Maior ticket: ${n.length > 18 ? n.slice(0, 16) + '…' : n}`,
+        value: fmtBRL(bestTicketSeg.revenue / bestTicketSeg.orders!),
+      })
+    }
+  }
+
+  return out
+}
+
+// ── KpiStrip expandida (4 → 6-7 KPIs) ───────────────────────────────────
 function KpiStrip({ rows }: { rows: GerencialViewRow[] }) {
-  const totalRev = rows.reduce((s, r) => s + r.revenue, 0)
-  const totalOrders = rows.reduce((s, r) => s + (r.orders ?? 0), 0)
-  const totalItems = rows.reduce((s, r) => s + r.items, 0)
-  const avgMargin = rows.length > 0 ? rows.reduce((s, r) => s + r.margin, 0) / rows.length : 0
+  const baseRows = rows.filter(r => !r.isSubgroup)  // evita dupla contagem em Linha de Produtos
+  const totalRev = baseRows.reduce((s, r) => s + r.revenue, 0)
+  const totalOrders = baseRows.reduce((s, r) => s + (r.orders ?? 0), 0)
+  const totalItems = baseRows.reduce((s, r) => s + r.items, 0)
+
+  const marginRows = baseRows.filter(r => r.revenue > 0)
+  const avgMargin = marginRows.length > 0
+    ? marginRows.reduce((s, r) => s + r.margin, 0) / marginRows.length
+    : 0
+
+  const ticketMedio = totalOrders > 0 ? totalRev / totalOrders : 0
+  const deficitCount = rows.filter(r => r.revenue < 0).length
+
+  const classARevenue = baseRows.filter(r => r.abcClass === 'A' && r.revenue > 0).reduce((s, r) => s + r.revenue, 0)
+  const posRevenue = baseRows.filter(r => r.revenue > 0).reduce((s, r) => s + r.revenue, 0)
+  const concABC = posRevenue > 0 ? (classARevenue / posRevenue) * 100 : 0
+
+  type Accent = 'positive' | 'negative' | 'warning' | 'neutral'
+  const marginAccent: Accent = avgMargin >= 120 ? 'positive' : avgMargin >= 80 ? 'warning' : 'negative'
+
+  const kpis: Array<{ label: string; value: string; accent: Accent }> = [
+    { label: 'Faturamento Total', value: fmtBRL(totalRev), accent: 'positive' },
+    { label: 'Total de Pedidos',  value: totalOrders > 0 ? fmtQty(totalOrders) : '—', accent: 'neutral' },
+    { label: 'Qtd. de Itens',     value: fmtQty(totalItems), accent: 'neutral' },
+    { label: 'Margem Média',      value: fmtPct(avgMargin), accent: marginAccent },
+    ...(ticketMedio > 0 ? [{ label: 'Ticket Médio', value: fmtBRL(ticketMedio), accent: 'neutral' as Accent }] : []),
+    ...(deficitCount > 0 ? [{ label: 'Em déficit', value: `${deficitCount} ${deficitCount === 1 ? 'item' : 'itens'}`, accent: 'negative' as Accent }] : []),
+    ...(concABC > 0 ? [{ label: 'Classe A concentra', value: fmtPct(concABC), accent: 'neutral' as Accent }] : []),
+  ]
+
+  const COLORS: Record<Accent, string> = {
+    positive: 'var(--positive)', negative: 'var(--negative)',
+    warning: 'var(--warning)', neutral: 'var(--text)',
+  }
+  const BGS: Record<Accent, string> = {
+    positive: 'rgba(16,185,129,0.06)', negative: 'rgba(244,63,94,0.06)',
+    warning: 'rgba(245,158,11,0.06)', neutral: 'var(--surface-2)',
+  }
 
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px', marginBottom: '20px' }}>
-      {[
-        { label: 'Faturamento Total', value: fmtBRL(totalRev) },
-        { label: 'Total de Pedidos', value: totalOrders > 0 ? fmtQty(totalOrders) : '—' },
-        { label: 'Qtd. de Itens', value: fmtQty(totalItems) },
-        { label: 'Margem Média', value: fmtPct(avgMargin) },
-      ].map((kpi) => (
+    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: '10px', marginBottom: '20px' }}>
+      {kpis.map((kpi) => (
         <div key={kpi.label} style={{
-          background: 'var(--surface-2)', border: '1px solid var(--border)',
+          background: BGS[kpi.accent],
+          border: `1px solid ${kpi.accent === 'neutral' ? 'var(--border)' : COLORS[kpi.accent] + '33'}`,
           borderRadius: 'var(--radius-md)', padding: '14px 18px',
           display: 'flex', flexDirection: 'column', gap: '3px',
         }}>
-          <span style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-dim)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+          <span style={{ fontSize: '10px', fontWeight: 700, color: 'var(--text-dim)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
             {kpi.label}
           </span>
-          <span style={{ fontSize: '18px', fontWeight: 800, color: 'var(--text)', letterSpacing: '-0.3px' }}>
+          <span style={{ fontSize: '18px', fontWeight: 800, color: COLORS[kpi.accent], letterSpacing: '-0.3px' }}>
             {kpi.value}
           </span>
         </div>
@@ -548,32 +770,42 @@ function KpiStrip({ rows }: { rows: GerencialViewRow[] }) {
   )
 }
 
+// ── Tabela com busca, hierarquia e highlight de negativos ─────────────────
 type SortKey = 'revenue' | 'margin' | 'profit' | 'items' | 'pctTotal' | 'name'
 
-function ViewTable({ rows }: { rows: GerencialViewRow[] }) {
+function ViewTable({ rows, isLinhasProdutos = false }: { rows: GerencialViewRow[]; isLinhasProdutos?: boolean }) {
   const [sortBy, setSortBy] = useState<SortKey>('revenue')
   const [sortDir, setSortDir] = useState<'desc' | 'asc'>('desc')
   const [hovered, setHovered] = useState<number | null>(null)
+  const [search, setSearch] = useState('')
 
-  const sorted = [...rows].sort((a, b) => {
-    const va = a[sortBy] as number | string
-    const vb = b[sortBy] as number | string
-    if (typeof va === 'string' && typeof vb === 'string') {
-      return sortDir === 'desc' ? vb.localeCompare(va) : va.localeCompare(vb)
-    }
-    return sortDir === 'desc' ? (vb as number) - (va as number) : (va as number) - (vb as number)
-  })
+  const sorted = isLinhasProdutos
+    ? rows
+    : [...rows].sort((a, b) => {
+        const va = a[sortBy] as number | string
+        const vb = b[sortBy] as number | string
+        if (typeof va === 'string' && typeof vb === 'string') {
+          return sortDir === 'desc' ? vb.localeCompare(va) : va.localeCompare(vb)
+        }
+        return sortDir === 'desc' ? (vb as number) - (va as number) : (va as number) - (vb as number)
+      })
+
+  const filtered = search.trim()
+    ? sorted.filter(r => r.name.toLowerCase().includes(search.toLowerCase()))
+    : sorted
 
   const handleSort = (key: SortKey) => {
-    if (sortBy === key) setSortDir((d) => (d === 'desc' ? 'asc' : 'desc'))
+    if (isLinhasProdutos) return
+    if (sortBy === key) setSortDir(d => d === 'desc' ? 'asc' : 'desc')
     else { setSortBy(key); setSortDir('desc') }
   }
 
   const thStyle = (key: SortKey): React.CSSProperties => ({
     padding: '10px 12px', fontSize: '11px', fontWeight: 700,
-    color: sortBy === key ? 'var(--gold)' : 'var(--text-dim)',
+    color: !isLinhasProdutos && sortBy === key ? 'var(--gold)' : 'var(--text-dim)',
     textTransform: 'uppercase', letterSpacing: '0.5px',
-    cursor: 'pointer', userSelect: 'none', whiteSpace: 'nowrap',
+    cursor: isLinhasProdutos ? 'default' : 'pointer',
+    userSelect: 'none', whiteSpace: 'nowrap',
     textAlign: key === 'name' ? 'left' : 'right',
     background: 'var(--surface-2)', borderBottom: '2px solid var(--border)',
   })
@@ -583,99 +815,211 @@ function ViewTable({ rows }: { rows: GerencialViewRow[] }) {
     textAlign: align, whiteSpace: 'nowrap', borderBottom: '1px solid var(--border)',
   })
 
-  const arrow = (key: SortKey) => sortBy === key ? (sortDir === 'desc' ? ' ↓' : ' ↑') : ''
-  const hasCode = rows.some((r) => r.code)
-  const hasOrders = rows.some((r) => r.orders !== undefined)
+  const arrow = (key: SortKey) => !isLinhasProdutos && sortBy === key ? (sortDir === 'desc' ? ' ↓' : ' ↑') : ''
+  const hasCode = rows.some(r => r.code)
+  const hasOrders = rows.some(r => r.orders !== undefined)
 
   return (
-    <div style={{ overflowX: 'auto', overflowY: 'auto', maxHeight: '520px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)' }}>
-      <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '700px' }}>
-        <thead>
-          <tr>
-            <th style={{ ...thStyle('name'), textAlign: 'center', width: '36px' }}>#</th>
-            <th style={{ ...thStyle('name'), textAlign: 'center', width: '44px' }}>ABC</th>
-            <th style={{ ...thStyle('name'), textAlign: 'left' }} onClick={() => handleSort('name')}>Nome{arrow('name')}</th>
-            {hasCode && <th style={thStyle('name')}>Cód.</th>}
-            {hasOrders && <th style={thStyle('items')}>Pedidos</th>}
-            <th style={thStyle('items')} onClick={() => handleSort('items')}>Itens{arrow('items')}</th>
-            <th style={thStyle('revenue')} onClick={() => handleSort('revenue')}>Faturamento{arrow('revenue')}</th>
-            <th style={thStyle('revenue')}>Custo</th>
-            <th style={thStyle('profit')} onClick={() => handleSort('profit')}>Lucro R${arrow('profit')}</th>
-            <th style={thStyle('margin')} onClick={() => handleSort('margin')}>Margem %{arrow('margin')}</th>
-            <th style={thStyle('pctTotal')} onClick={() => handleSort('pctTotal')}>% Total{arrow('pctTotal')}</th>
-          </tr>
-        </thead>
-        <tbody>
-          {sorted.map((row, idx) => (
-            <tr
-              key={idx}
-              onMouseEnter={() => setHovered(idx)}
-              onMouseLeave={() => setHovered(null)}
-              style={{ background: hovered === idx ? 'rgba(201,168,76,0.06)' : idx % 2 === 0 ? 'var(--surface)' : 'var(--surface-2)' }}
-            >
-              <td style={{ ...tdStyle(), textAlign: 'center', color: 'var(--text-muted)', fontSize: '12px' }}>{idx + 1}</td>
-              <td style={{ ...tdStyle(), textAlign: 'center' }}>
-                <span style={{
-                  display: 'inline-block', padding: '2px 7px', borderRadius: '999px',
-                  fontSize: '11px', fontWeight: 700,
-                  color: ABC_COLOR[row.abcClass], background: ABC_BG[row.abcClass],
-                }}>{row.abcClass}</span>
-              </td>
-              <td style={{ ...tdStyle('left'), fontWeight: 600, maxWidth: '220px', overflow: 'hidden', textOverflow: 'ellipsis' }}>{row.name}</td>
-              {hasCode && <td style={{ ...tdStyle(), color: 'var(--text-muted)', fontSize: '12px', fontFamily: 'var(--font-mono)' }}>{row.code ?? '—'}</td>}
-              {hasOrders && <td style={tdStyle()}>{row.orders !== undefined ? fmtQty(row.orders) : '—'}</td>}
-              <td style={tdStyle()}>{fmtQty(row.items)}</td>
-              <td style={{ ...tdStyle(), fontWeight: 700 }}>{fmtBRL(row.revenue)}</td>
-              <td style={{ ...tdStyle(), color: 'var(--text-muted)' }}>{fmtBRL(row.cost)}</td>
-              <td style={{ ...tdStyle(), color: row.profit >= 0 ? 'var(--positive)' : 'var(--negative)', fontWeight: 600 }}>{fmtBRL(row.profit)}</td>
-              <td style={{ ...tdStyle(), color: row.margin >= 120 ? 'var(--positive)' : row.margin >= 80 ? 'var(--warning)' : 'var(--negative)', fontWeight: 700 }}>{fmtPct(row.margin)}</td>
-              <td style={{ ...tdStyle(), color: 'var(--text-dim)' }}>{fmtPct(row.pctTotal)}</td>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+      {/* Campo de busca */}
+      <div style={{ position: 'relative' }}>
+        <svg style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', opacity: 0.4, pointerEvents: 'none' }}
+          width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
+        </svg>
+        <input
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+          placeholder="Buscar…"
+          style={{
+            width: '100%', boxSizing: 'border-box',
+            padding: '8px 36px 8px 34px',
+            background: 'var(--surface-2)', border: '1px solid var(--border)',
+            borderRadius: 'var(--radius-md)', fontSize: '13px',
+            color: 'var(--text)', outline: 'none', fontFamily: 'var(--font-sans)',
+          }}
+        />
+        {search && (
+          <button onClick={() => setSearch('')} style={{
+            position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)',
+            background: 'none', border: 'none', cursor: 'pointer',
+            color: 'var(--text-muted)', fontSize: '18px', lineHeight: 1, padding: '0 2px',
+          }}>×</button>
+        )}
+      </div>
+
+      <div style={{ overflowX: 'auto', overflowY: 'auto', maxHeight: '520px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)' }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '700px' }}>
+          <thead>
+            <tr>
+              <th style={{ ...thStyle('name'), textAlign: 'center', width: '36px' }}>#</th>
+              <th style={{ ...thStyle('name'), textAlign: 'center', width: '44px' }}>ABC</th>
+              <th style={{ ...thStyle('name'), textAlign: 'left' }} onClick={() => handleSort('name')}>Nome{arrow('name')}</th>
+              {hasCode && <th style={thStyle('name')}>Cód.</th>}
+              {hasOrders && <th style={thStyle('items')}>Pedidos</th>}
+              <th style={thStyle('items')} onClick={() => handleSort('items')}>Itens{arrow('items')}</th>
+              <th style={thStyle('revenue')} onClick={() => handleSort('revenue')}>Faturamento{arrow('revenue')}</th>
+              <th style={thStyle('revenue')}>Custo</th>
+              <th style={thStyle('profit')} onClick={() => handleSort('profit')}>Lucro R${arrow('profit')}</th>
+              <th style={thStyle('margin')} onClick={() => handleSort('margin')}>Margem %{arrow('margin')}</th>
+              <th style={thStyle('pctTotal')} onClick={() => handleSort('pctTotal')}>% Total{arrow('pctTotal')}</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {filtered.length === 0 && (
+              <tr>
+                <td colSpan={99} style={{ textAlign: 'center', padding: '32px', color: 'var(--text-muted)', fontSize: '13px' }}>
+                  Nenhum resultado para "{search}"
+                </td>
+              </tr>
+            )}
+            {filtered.map((row, idx) => {
+              const isNeg = row.revenue < 0
+              const isGroup = isLinhasProdutos && !row.isSubgroup
+              const rowBg = isNeg
+                ? 'rgba(244,63,94,0.07)'
+                : hovered === idx
+                  ? 'rgba(201,168,76,0.06)'
+                  : idx % 2 === 0 ? 'var(--surface)' : 'var(--surface-2)'
+              return (
+                <tr key={idx} onMouseEnter={() => setHovered(idx)} onMouseLeave={() => setHovered(null)}
+                  style={{ background: rowBg }}>
+                  <td style={{ ...tdStyle(), textAlign: 'center', color: 'var(--text-muted)', fontSize: '12px' }}>{idx + 1}</td>
+                  <td style={{ ...tdStyle(), textAlign: 'center' }}>
+                    {!row.isSubgroup && (
+                      <span style={{
+                        display: 'inline-block', padding: '2px 7px', borderRadius: '999px',
+                        fontSize: '11px', fontWeight: 700,
+                        color: ABC_COLOR[row.abcClass], background: ABC_BG[row.abcClass],
+                      }}>{row.abcClass}</span>
+                    )}
+                  </td>
+                  <td style={{
+                    ...tdStyle('left'),
+                    fontWeight: isGroup ? 700 : 500,
+                    paddingLeft: row.isSubgroup ? '28px' : '12px',
+                    maxWidth: '240px', overflow: 'hidden', textOverflow: 'ellipsis',
+                    color: isNeg ? 'var(--negative)' : 'var(--text)',
+                  }}>
+                    {row.name}
+                    {isNeg && (
+                      <span style={{
+                        marginLeft: '7px', fontSize: '10px', fontWeight: 700,
+                        color: 'var(--negative)', background: 'rgba(244,63,94,0.12)',
+                        padding: '1px 6px', borderRadius: '4px',
+                      }}>↩ devolução</span>
+                    )}
+                  </td>
+                  {hasCode && <td style={{ ...tdStyle(), color: 'var(--text-muted)', fontSize: '12px', fontFamily: 'var(--font-mono)' }}>{row.code ?? '—'}</td>}
+                  {hasOrders && <td style={tdStyle()}>{row.orders !== undefined ? fmtQty(row.orders) : '—'}</td>}
+                  <td style={tdStyle()}>{fmtQty(row.items)}</td>
+                  <td style={{ ...tdStyle(), fontWeight: 700, color: isNeg ? 'var(--negative)' : 'var(--text)' }}>{fmtBRL(row.revenue)}</td>
+                  <td style={{ ...tdStyle(), color: 'var(--text-muted)' }}>{fmtBRL(row.cost)}</td>
+                  <td style={{ ...tdStyle(), color: row.profit >= 0 ? 'var(--positive)' : 'var(--negative)', fontWeight: 600 }}>{fmtBRL(row.profit)}</td>
+                  <td style={{ ...tdStyle(), color: row.margin >= 120 ? 'var(--positive)' : row.margin >= 80 ? 'var(--warning)' : 'var(--negative)', fontWeight: 700 }}>{fmtPct(row.margin)}</td>
+                  <td style={{ ...tdStyle(), color: 'var(--text-dim)', fontSize: '12px' }}>
+                    {row.isSubgroup ? `↳ ${fmtPct(row.pctTotal)}` : fmtPct(row.pctTotal)}
+                  </td>
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
+      </div>
     </div>
   )
 }
 
-interface ViewTooltipProps { active?: boolean; payload?: Array<{ payload: { name: string; revenue: number; margin: number; abcClass: 'A' | 'B' | 'C' } }> }
+// ── Gráfico com toggle Receita / Margem ───────────────────────────────────
+interface ViewTooltipProps {
+  active?: boolean
+  payload?: Array<{ payload: { name: string; revenue: number; margin: number; profit: number; abcClass: 'A' | 'B' | 'C' } }>
+}
 function ViewTooltip({ active, payload }: ViewTooltipProps) {
   if (!active || !payload?.[0]?.payload) return null
   const d = payload[0].payload
   return (
-    <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', padding: '10px 14px', boxShadow: 'var(--shadow-md)', fontSize: '12px' }}>
-      <p style={{ fontWeight: 700, color: 'var(--text)', marginBottom: '4px', maxWidth: '180px' }}>{d.name}</p>
+    <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', padding: '10px 14px', boxShadow: 'var(--shadow-md)', fontSize: '12px', maxWidth: '220px' }}>
+      <p style={{ fontWeight: 700, color: 'var(--text)', marginBottom: '4px', whiteSpace: 'normal', lineHeight: 1.3 }}>{d.name}</p>
       <p style={{ color: 'var(--text-dim)' }}>Fat: <strong style={{ color: 'var(--text)' }}>{fmtBRL(d.revenue)}</strong></p>
       <p style={{ color: 'var(--text-dim)' }}>Margem: <strong style={{ color: ABC_COLOR[d.abcClass] }}>{fmtPct(d.margin)}</strong></p>
+      <p style={{ color: 'var(--text-dim)' }}>Lucro: <strong style={{ color: d.profit >= 0 ? 'var(--positive)' : 'var(--negative)' }}>{fmtBRL(d.profit)}</strong></p>
     </div>
   )
 }
 
+function marginBarColor(m: number): string {
+  return m >= 120 ? '#10B981' : m >= 80 ? '#F59E0B' : '#F43F5E'
+}
+
 function ViewChart({ rows }: { rows: GerencialViewRow[] }) {
-  const top10 = [...rows].sort((a, b) => b.revenue - a.revenue).slice(0, 10).map((r) => ({
+  const [mode, setMode] = useState<'revenue' | 'margin'>('revenue')
+
+  const positive = rows.filter(r => r.revenue > 0)
+
+  const mapRow = (r: GerencialViewRow) => ({
     name: r.name.length > 22 ? r.name.slice(0, 20) + '…' : r.name,
-    revenue: r.revenue, margin: r.margin, abcClass: r.abcClass,
-  }))
+    revenue: r.revenue, margin: r.margin, profit: r.profit, abcClass: r.abcClass,
+  })
+
+  const top10Rev = [...positive].sort((a, b) => b.revenue - a.revenue).slice(0, 10).map(mapRow)
+  const top10Mar = [...positive].sort((a, b) => b.margin - a.margin).slice(0, 10).map(mapRow)
+  const data = mode === 'revenue' ? top10Rev : top10Mar
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-      <div style={{ display: 'flex', gap: '16px', justifyContent: 'flex-end' }}>
-        {(['A', 'B', 'C'] as const).map((cls) => (
-          <span key={cls} style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '12px', color: 'var(--text-dim)' }}>
-            <span style={{ width: '10px', height: '10px', borderRadius: '2px', background: ABC_COLOR[cls] }} />
-            {cls === 'A' ? '≤75%' : cls === 'B' ? '75–95%' : '>95%'}
-          </span>
-        ))}
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+      {/* Toggle */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <span style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-dim)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+          Top 10
+        </span>
+        <div style={{ display: 'flex', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '8px', padding: '2px', gap: '2px' }}>
+          {(['revenue', 'margin'] as const).map(m => (
+            <button key={m} onClick={() => setMode(m)} style={{
+              padding: '4px 10px', fontSize: '11px', fontWeight: 600,
+              background: mode === m ? 'var(--navy)' : 'transparent',
+              color: mode === m ? 'var(--gold)' : 'var(--text-dim)',
+              border: 'none', borderRadius: '6px', cursor: 'pointer',
+              transition: 'all 0.15s ease', fontFamily: 'var(--font-sans)',
+            }}>
+              {m === 'revenue' ? 'Receita' : 'Margem'}
+            </button>
+          ))}
+        </div>
       </div>
-      <ResponsiveContainer width="100%" height={340}>
-        <BarChart data={top10} layout="vertical" margin={{ left: 0, right: 20, top: 0, bottom: 0 }}>
-          <XAxis type="number" dataKey="revenue" tickFormatter={fmtBRLShort}
+
+      {/* Legenda dinâmica */}
+      <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end', flexWrap: 'wrap' }}>
+        {mode === 'revenue'
+          ? (['A', 'B', 'C'] as const).map(cls => (
+              <span key={cls} style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '11px', color: 'var(--text-dim)' }}>
+                <span style={{ width: '9px', height: '9px', borderRadius: '2px', background: ABC_COLOR[cls] }} />
+                {cls === 'A' ? '≤75%' : cls === 'B' ? '75–95%' : '>95%'}
+              </span>
+            ))
+          : [{ c: '#10B981', l: '≥120%' }, { c: '#F59E0B', l: '80–120%' }, { c: '#F43F5E', l: '<80%' }].map(x => (
+              <span key={x.l} style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '11px', color: 'var(--text-dim)' }}>
+                <span style={{ width: '9px', height: '9px', borderRadius: '2px', background: x.c }} />
+                {x.l}
+              </span>
+            ))
+        }
+      </div>
+
+      <ResponsiveContainer width="100%" height={320}>
+        <BarChart data={data} layout="vertical" margin={{ left: 0, right: 24, top: 0, bottom: 0 }}>
+          <XAxis type="number" dataKey={mode === 'revenue' ? 'revenue' : 'margin'}
+            tickFormatter={mode === 'revenue' ? fmtBRLShort : (v: number) => fmtPct(v)}
             tick={{ fontSize: 11, fill: 'var(--text-muted)' }} axisLine={false} tickLine={false} />
           <YAxis type="category" dataKey="name" width={140}
             tick={{ fontSize: 11, fill: 'var(--text-dim)' }} axisLine={false} tickLine={false} />
           <Tooltip content={<ViewTooltip />} cursor={{ fill: 'rgba(201,168,76,0.06)' }} />
-          <Bar dataKey="revenue" radius={[0, 4, 4, 0]} barSize={22}>
-            {top10.map((entry, idx) => <Cell key={idx} fill={ABC_COLOR[entry.abcClass]} fillOpacity={0.85} />)}
+          <Bar dataKey={mode === 'revenue' ? 'revenue' : 'margin'} radius={[0, 4, 4, 0]} barSize={20}>
+            {data.map((entry, idx) => (
+              <Cell key={idx}
+                fill={mode === 'revenue' ? ABC_COLOR[entry.abcClass] : marginBarColor(entry.margin)}
+                fillOpacity={0.85} />
+            ))}
           </Bar>
         </BarChart>
       </ResponsiveContainer>
@@ -683,7 +1027,22 @@ function ViewChart({ rows }: { rows: GerencialViewRow[] }) {
   )
 }
 
+// ── Empty state para dimensões sem dados configurados ─────────────────────
+const UNCONFIGURED_HINTS: Partial<Record<GerencialViewType, string>> = {
+  area:         'Configure as áreas de entrega em Vinhasoft → Cadastros → Regiões/Áreas',
+  supervisores: 'Associe supervisores aos vendedores em Vinhasoft → Cadastros → Vendedores',
+}
+
+function isUnconfigured(view: GerencialView): boolean {
+  const r = view.rows
+  return r.length === 1 && r[0].name.toLowerCase().replace(/\s/g, '').includes('especificado')
+}
+
 function DetailView({ view }: { view: GerencialView }) {
+  const insights = buildViewInsights(view)
+  const unconfigHint = isUnconfigured(view) ? UNCONFIGURED_HINTS[view.type] : undefined
+  const isLinhas = view.type === 'linhasProdutos'
+
   return (
     <div>
       {view.period && (
@@ -691,17 +1050,40 @@ function DetailView({ view }: { view: GerencialView }) {
           {view.period}{view.generatedAt ? ` — gerado em ${view.generatedAt}` : ''}
         </p>
       )}
+
+      {/* Aviso de dimensão não configurada */}
+      {unconfigHint && (
+        <div style={{
+          background: 'rgba(245,158,11,0.07)', border: '1px solid rgba(245,158,11,0.3)',
+          borderRadius: 'var(--radius-md)', padding: '14px 18px', marginBottom: '20px',
+          display: 'flex', alignItems: 'flex-start', gap: '12px',
+        }}>
+          <span style={{ fontSize: '20px', lineHeight: 1, flexShrink: 0 }}>⚙️</span>
+          <div>
+            <p style={{ fontSize: '13px', fontWeight: 700, color: '#B45309', marginBottom: '3px' }}>
+              Dimensão não configurada no Vinhasoft
+            </p>
+            <p style={{ fontSize: '12px', color: '#92400E' }}>{unconfigHint}</p>
+          </div>
+        </div>
+      )}
+
+      {/* Insights automáticos */}
+      {insights.length > 0 && (
+        <div style={{ marginBottom: '20px' }}>
+          <InsightsStrip insights={insights} />
+        </div>
+      )}
+
       <KpiStrip rows={view.rows} />
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 420px', gap: '20px', alignItems: 'start' }}>
-        <ViewTable rows={view.rows} />
+
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 400px', gap: '20px', alignItems: 'start' }}>
+        <ViewTable rows={view.rows} isLinhasProdutos={isLinhas} />
         <div style={{
           background: 'var(--surface-2)', border: '1px solid var(--border)',
           borderRadius: 'var(--radius-md)', padding: '16px',
           position: 'sticky', top: '12px',
         }}>
-          <p style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-dim)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '12px' }}>
-            Top 10 — Faturamento
-          </p>
           <ViewChart rows={view.rows} />
         </div>
       </div>
