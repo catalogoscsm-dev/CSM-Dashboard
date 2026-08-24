@@ -1,21 +1,22 @@
 /* ============================================================
    CSM Dashboard — Design System Global
+   Tema: Branco & Laranja — Elegante & Sofisticado
    ============================================================ */
 
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap');
 
 :root {
   /* Superfícies */
-  --bg:           #F4F5F7;
+  --bg:           #FDFCFA;
   --surface:      #FFFFFF;
-  --surface-2:    #F0F1F4;
-  --sidebar:      #0D1B2A;
-  --sidebar-l:    #162436;
+  --surface-2:    #FFF5ED;
+  --sidebar:      #1C0F05;
+  --sidebar-l:    #2E1A0A;
 
-  /* Marca */
-  --gold:         #C9A84C;
-  --gold-light:   #E8C96A;
-  --navy:         #0D1B2A;
+  /* Marca — Laranja & Branco */
+  --gold:         #F97316;
+  --gold-light:   #FDBA74;
+  --navy:         #1C0F05;
 
   /* Semântica */
   --positive:     #10B981;
@@ -26,16 +27,16 @@
   --warning-bg:   #FEF3C7;
 
   /* Texto */
-  --text:         #1A1F2E;
+  --text:         #1A0F05;
   --text-dim:     #6B7280;
   --text-muted:   #9CA3AF;
-  --text-on-dark: #E8ECF0;
+  --text-on-dark: #FFF5ED;
 
   /* Bordas e sombras */
-  --border:       #E5E7EB;
-  --shadow-sm:    0 1px 3px rgba(0,0,0,0.08);
-  --shadow-md:    0 4px 16px rgba(0,0,0,0.10);
-  --shadow-lg:    0 8px 32px rgba(0,0,0,0.14);
+  --border:       #F0E8E0;
+  --shadow-sm:    0 1px 3px rgba(249,115,22,0.06);
+  --shadow-md:    0 4px 16px rgba(249,115,22,0.10);
+  --shadow-lg:    0 8px 32px rgba(249,115,22,0.16);
 
   /* Tipografia */
   --font-sans:    'Inter', system-ui, sans-serif;
@@ -47,13 +48,13 @@
   --radius-lg:    16px;
 
   /* Cores de categorias para gráficos */
-  --cat-0: #3B82F6;
-  --cat-1: #8B5CF6;
+  --cat-0: #F97316;
+  --cat-1: #EC4899;
   --cat-2: #10B981;
   --cat-3: #F59E0B;
   --cat-4: #EF4444;
   --cat-5: #06B6D4;
-  --cat-6: #EC4899;
+  --cat-6: #8B5CF6;
   --cat-7: #84CC16;
 }
 
@@ -76,13 +77,16 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
-/* Scrollbar customizada */
+/* Scrollbar laranja */
 ::-webkit-scrollbar { width: 6px; height: 6px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
-::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
+::-webkit-scrollbar-thumb { background: var(--gold-light); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--gold); }
 
-/* Animações base */
+/* ============================================================
+   Animações
+   ============================================================ */
+
 @keyframes fadeSlideUp {
   from { opacity: 0; transform: translateY(16px); }
   to   { opacity: 1; transform: translateY(0); }
@@ -102,9 +106,81 @@ body {
   to { transform: rotate(360deg); }
 }
 
-/* Utilitários */
+/* Shimmer sweep — texto e bordas */
+@keyframes shimmer {
+  0%   { background-position: -200% center; }
+  100% { background-position:  200% center; }
+}
+
+/* Brilho no logo */
+@keyframes logoGlow {
+  0%, 100% { filter: drop-shadow(0 0 6px rgba(249,115,22,0.0)); }
+  50%       { filter: drop-shadow(0 0 18px rgba(249,115,22,0.55)) drop-shadow(0 0 32px rgba(249,115,22,0.25)); }
+}
+
+/* Pulsação suave laranja para a drop zone */
+@keyframes importPulse {
+  0%, 100% {
+    border-color: var(--gold);
+    box-shadow: 0 0 28px rgba(249,115,22,0.15);
+  }
+  50% {
+    border-color: rgba(249,115,22,0.35);
+    box-shadow: none;
+  }
+}
+
+/* Brilho suave em cards */
+@keyframes cardShine {
+  0%   { opacity: 0; transform: translateX(-100%) skewX(-20deg); }
+  60%  { opacity: 0.4; }
+  100% { opacity: 0; transform: translateX(200%) skewX(-20deg); }
+}
+
+/* Linha de brilho que varre a tela (header) */
+@keyframes headerSheen {
+  0%   { transform: translateX(-100%); }
+  100% { transform: translateX(400%); }
+}
+
+/* ============================================================
+   Classes utilitárias
+   ============================================================ */
+
+/* Durante exportação PDF — congela todas as animações do DOM */
+body.pdf-exporting *,
+body.pdf-exporting *::before,
+body.pdf-exporting *::after {
+  animation: none !important;
+  transition: none !important;
+  opacity: 1 !important;
+}
+
 .font-mono { font-family: var(--font-mono); }
 .text-positive { color: var(--positive); }
 .text-negative { color: var(--negative); }
 .text-warning  { color: var(--warning); }
 .text-gold     { color: var(--gold); }
+
+/* Texto com gradiente metálico laranja — shimmer contínuo */
+.brand-shimmer {
+  background: linear-gradient(
+    100deg,
+    #C2410C 0%,
+    #F97316 25%,
+    #FDBA74 45%,
+    #F97316 55%,
+    #C2410C 80%,
+    #F97316 100%
+  );
+  background-size: 250% auto;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  animation: shimmer 4s linear infinite;
+}
+
+/* Logo com glow pulsante */
+.logo-glow {
+  animation: logoGlow 3s ease-in-out infinite;
+}

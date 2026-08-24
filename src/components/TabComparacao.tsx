@@ -1,4 +1,5 @@
 import { useRef, useState } from 'react'
+import { useCountUp } from '../utils/animations'
 import { useDashboardStore } from '../store/useDashboardStore'
 import { fmtBRL, fmtPct, fmtQty } from '../utils/format'
 import { readFileAsWindows1252 } from '../utils/parser'
@@ -38,20 +39,28 @@ function CompareKPICard({
   format: (v: number) => string
   icon: React.ReactNode
 }) {
+  const animA = useCountUp(valueA)
+  const [hovered, setHovered] = useState(false)
   return (
-    <div style={{
-      background: 'var(--surface)',
-      borderRadius: 'var(--radius-md)',
-      padding: '18px 20px',
-      boxShadow: 'var(--shadow-sm)',
-      border: '1px solid var(--border)',
-      flex: '1 1 180px',
-      minWidth: '160px',
-      display: 'flex',
-      flexDirection: 'column',
-      gap: '8px',
-      animation: 'fadeSlideUp 0.4s ease both',
-    }}>
+    <div
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      style={{
+        background: 'var(--surface)',
+        borderRadius: 'var(--radius-md)',
+        padding: '18px 20px',
+        boxShadow: hovered ? 'var(--shadow-md), 0 4px 16px rgba(15,30,75,0.12)' : 'var(--shadow-sm)',
+        border: `1px solid ${hovered ? 'var(--navy)55' : 'var(--border)'}`,
+        flex: '1 1 180px',
+        minWidth: '160px',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '8px',
+        animation: 'fadeSlideUp 0.4s ease both',
+        transition: 'box-shadow 0.25s, border-color 0.25s, transform 0.2s',
+        transform: hovered ? 'translateY(-2px)' : 'translateY(0)',
+        cursor: 'default',
+      }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <span style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-dim)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
           {label}
@@ -59,7 +68,7 @@ function CompareKPICard({
         <span style={{ color: 'var(--text-dim)' }}>{icon}</span>
       </div>
       <div style={{ fontSize: '22px', fontWeight: 800, color: 'var(--navy)', fontFamily: 'var(--font-mono)' }}>
-        {format(valueA)}
+        {format(animA)}
       </div>
       <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
         <span style={{ fontSize: '13px', color: 'var(--text-dim)', fontFamily: 'var(--font-mono)' }}>

@@ -1,12 +1,16 @@
 import { useRef, useState, useCallback } from 'react'
 import { useDashboardStore } from '../store/useDashboardStore'
 import { readFileAsWindows1252 } from '../utils/parser'
+import { detectReportType } from '../utils/parserGerencial'
 import CsmLogo from './CsmLogo'
 import { fmtBRL } from '../utils/format'
 
 export default function ImportScreen() {
   const loadReport = useDashboardStore((s) => s.loadReport)
+  const loadGerencial = useDashboardStore((s) => s.loadGerencial)
+  const loadGerencialView = useDashboardStore((s) => s.loadGerencialView)
   const history = useDashboardStore((s) => s.history)
+  const activeCompanyId = useDashboardStore((s) => s.activeCompanyId)
   const loadFromHistory = useDashboardStore((s) => s.loadFromHistory)
   const setActiveTab = useDashboardStore((s) => s.setActiveTab)
   const [dragging, setDragging] = useState(false)
@@ -23,13 +27,16 @@ export default function ImportScreen() {
     setError(null)
     try {
       const html = await readFileAsWindows1252(file)
-      loadReport(html)
+      const type = detectReportType(html)
+      if (type === 'gerencialView') loadGerencialView(html)
+      else if (type === 'gerencial') loadGerencial(html)
+      else loadReport(html)
     } catch {
       setError('Erro ao ler o arquivo. Tente novamente.')
     } finally {
       setLoading(false)
     }
-  }, [loadReport])
+  }, [loadReport, loadGerencial, loadGerencialView])
 
   const onDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault()
@@ -56,10 +63,15 @@ export default function ImportScreen() {
     }
   }
 
+  // Filtra histórico pela empresa ativa (ou mostra tudo se ainda não há empresa ativa)
+  const filteredHistory = activeCompanyId
+    ? history.filter((e) => e.companyId === activeCompanyId)
+    : history
+
   return (
     <div style={{
       minHeight: '100vh',
-      background: 'var(--navy)',
+      background: 'radial-gradient(ellipse at 50% 30%, #2E1A0A 0%, #140A02 60%, #0F0804 100%)',
       display: 'flex',
       flexDirection: 'column',
       alignItems: 'center',
@@ -67,14 +79,29 @@ export default function ImportScreen() {
       gap: '32px',
       padding: '24px',
       animation: 'fadeSlideUp 0.5s ease both',
+      position: 'relative',
+      overflow: 'hidden',
     }}>
-      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '16px' }}>
+      {/* Círculos decorativos de glow */}
+      <div style={{
+        position: 'absolute', top: '-80px', left: '50%', transform: 'translateX(-50%)',
+        width: '500px', height: '300px',
+        background: 'radial-gradient(ellipse, rgba(249,115,22,0.18) 0%, transparent 70%)',
+        pointerEvents: 'none',
+      }} />
+      <div style={{
+        position: 'absolute', bottom: '-60px', right: '10%',
+        width: '300px', height: '300px',
+        background: 'radial-gradient(ellipse, rgba(249,115,22,0.10) 0%, transparent 70%)',
+        pointerEvents: 'none',
+      }} />
+
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '16px', position: 'relative' }}>
         <div style={{ animation: 'fadeSlideUp 0.6s ease 0.1s both' }}>
-          <CsmLogo size={80} />
+          <CsmLogo size={96} />
         </div>
-        <h1 style={{
-          color: 'var(--gold)',
-          fontSize: '32px',
+        <h1 className="brand-shimmer" style={{
+          fontSize: '34px',
           fontWeight: 800,
           letterSpacing: '-0.5px',
           animation: 'fadeSlideUp 0.6s ease 0.2s both',
@@ -83,11 +110,14 @@ export default function ImportScreen() {
         </h1>
         <p style={{
           color: 'var(--text-on-dark)',
-          opacity: 0.6,
-          fontSize: '14px',
+          opacity: 0.5,
+          fontSize: '13px',
+          letterSpacing: '2px',
+          textTransform: 'uppercase',
+          fontWeight: 500,
           animation: 'fadeSlideUp 0.6s ease 0.3s both',
         }}>
-          Campinas Shopping Móveis — Business Intelligence
+          Campinas Shopping Móveis &nbsp;·&nbsp; Business Intelligence
         </p>
       </div>
 
@@ -122,7 +152,7 @@ export default function ImportScreen() {
           Arraste o relatório <span style={{ color: 'var(--gold)', fontWeight: 700 }}>.HTM</span> do Vinhasoft aqui
         </p>
         <p style={{ color: 'var(--text-on-dark)', opacity: 0.5, fontSize: '13px' }}>
-          ou clique para selecionar o arquivo
+          ou clique para selecionar (Vendas, Gerencial ou Visão detalhada)
         </p>
         <input
           ref={inputRef}
@@ -165,7 +195,7 @@ export default function ImportScreen() {
         Carregar exemplo (Agosto 2026)
       </button>
 
-      {history.length > 0 && (
+      {filteredHistory.length > 0 && (
         <div style={{
           width: '100%',
           maxWidth: '480px',
@@ -175,7 +205,7 @@ export default function ImportScreen() {
             Relatórios recentes
           </p>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-            {history.slice(0, 5).map((entry) => (
+            {filteredHistory.slice(0, 5).map((entry) => (
               <button
                 key={entry.id}
                 onClick={() => loadFromHistory(entry.id)}
@@ -229,8 +259,8 @@ export default function ImportScreen() {
 
       <style>{`
         @keyframes importPulse {
-          0%, 100% { border-color: var(--gold); }
-          50% { border-color: rgba(201,168,76,0.4); }
+          0%, 100% { border-color: var(--gold); box-shadow: 0 0 32px rgba(249,115,22,0.18); }
+          50%       { border-color: rgba(249,115,22,0.35); box-shadow: none; }
         }
       `}</style>
     </div>

@@ -34,6 +34,8 @@ export default function ProductsTable({ categories }: Props) {
   const setActiveCategory = useDashboardStore((s) => s.setActiveCategory)
   const thresholds = useDashboardStore((s) => s.thresholds)
 
+  const isPdfExporting = useDashboardStore((s) => s.isPdfExporting)
+
   const [filterCategory, setFilterCategory] = useState<string>('all')
   const [sortKey, setSortKey] = useState<SortKey>('revenue')
   const [sortDir, setSortDir] = useState<SortDir>('desc')
@@ -72,7 +74,7 @@ export default function ProductsTable({ categories }: Props) {
   }, [allProducts, filterCategory, showReturnsOnly, searchQuery, sortKey, sortDir])
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))
-  const paginated = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
+  const paginated = isPdfExporting ? filtered : filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
 
   const handleSort = (key: SortKey) => {
     if (sortKey === key) {
@@ -119,11 +121,11 @@ export default function ProductsTable({ categories }: Props) {
       border: '1px solid var(--border)',
       overflow: 'hidden',
     }}>
-      {/* Toolbar */}
+      {/* Toolbar — oculta durante exportação PDF */}
       <div style={{
         padding: '16px 20px',
         borderBottom: '1px solid var(--border)',
-        display: 'flex',
+        display: isPdfExporting ? 'none' : 'flex',
         gap: '12px',
         flexWrap: 'wrap',
         alignItems: 'center',
@@ -234,9 +236,10 @@ export default function ProductsTable({ categories }: Props) {
                 key={p.code + i}
                 style={{
                   background: p.isReturn ? '#FFF1F2' : i % 2 === 0 ? 'var(--surface)' : 'var(--surface-2)',
-                  transition: 'background 0.1s',
+                  transition: isPdfExporting ? 'none' : 'background 0.1s',
+                  animation: isPdfExporting ? 'none' : `fadeSlideUp 0.22s ease ${Math.min(i, 14) * 25}ms both`,
                 }}
-                onMouseEnter={(e) => (e.currentTarget.style.background = '#F0F9FF')}
+                onMouseEnter={(e) => (e.currentTarget.style.background = 'rgba(201,168,76,0.07)')}
                 onMouseLeave={(e) => (e.currentTarget.style.background = p.isReturn ? '#FFF1F2' : i % 2 === 0 ? 'var(--surface)' : 'var(--surface-2)')}
               >
                 <td style={tdStyle}>
@@ -295,8 +298,8 @@ export default function ProductsTable({ categories }: Props) {
         </table>
       </div>
 
-      {/* Pagination */}
-      {totalPages > 1 && (
+      {/* Pagination — oculta durante exportação PDF */}
+      {totalPages > 1 && !isPdfExporting && (
         <div style={{
           padding: '12px 20px',
           borderTop: '1px solid var(--border)',
