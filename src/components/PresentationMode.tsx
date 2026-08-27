@@ -2,6 +2,7 @@ import { useEffect } from 'react'
 import { useDashboardStore } from '../store/useDashboardStore'
 import { fmtBRL, fmtPct, fmtQty } from '../utils/format'
 import CsmLogo from './CsmLogo'
+import type { GerencialData } from '../types'
 
 function BigKPI({ label, value, sub }: { label: string; value: string; sub?: string }) {
   return (
@@ -42,9 +43,139 @@ function BigKPI({ label, value, sub }: { label: string; value: string; sub?: str
   )
 }
 
+function PresentationHeader({ company, period, onClose }: { company: string; period: string; onClose: () => void }) {
+  return (
+    <div style={{
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      padding: '20px 32px',
+      borderBottom: '1px solid rgba(201,168,76,0.2)',
+      flexShrink: 0,
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+        <CsmLogo size={40} />
+        <div>
+          <div style={{ fontSize: '18px', fontWeight: 800, color: 'var(--gold)', letterSpacing: '-0.3px' }}>
+            {company}
+          </div>
+          <div style={{ fontSize: '12px', color: 'rgba(255,255,255,0.45)', marginTop: '2px' }}>
+            {period}
+          </div>
+        </div>
+      </div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+          <div style={{
+            width: '8px', height: '8px', borderRadius: '50%',
+            background: 'var(--positive)',
+            animation: 'pulse 2s ease infinite',
+          }} />
+          <span style={{ fontSize: '11px', color: 'rgba(255,255,255,0.4)' }}>ao vivo</span>
+        </div>
+        <button
+          onClick={onClose}
+          title="Fechar apresentação (ESC)"
+          style={{
+            background: 'rgba(255,255,255,0.08)',
+            border: '1px solid rgba(255,255,255,0.15)',
+            borderRadius: 'var(--radius-sm)',
+            color: 'rgba(255,255,255,0.6)',
+            padding: '6px 14px',
+            cursor: 'pointer',
+            fontSize: '12px',
+            fontWeight: 600,
+          }}
+        >
+          ✕ ESC
+        </button>
+      </div>
+    </div>
+  )
+}
+
+function GerencialPresentation({ gerencial, onClose }: { gerencial: GerencialData; onClose: () => void }) {
+  return (
+    <div style={{
+      position: 'fixed',
+      inset: 0,
+      background: 'var(--navy)',
+      zIndex: 9999,
+      display: 'flex',
+      flexDirection: 'column',
+      animation: 'fadeSlideUp 0.3s ease both',
+    }}>
+      <PresentationHeader company={gerencial.company} period={gerencial.period} onClose={onClose} />
+
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', padding: '32px', gap: '24px', overflow: 'auto' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '20px' }}>
+          <BigKPI
+            label="Faturamento Bruto"
+            value={fmtBRL(gerencial.grossRevenue)}
+          />
+          <BigKPI
+            label="Faturamento Líquido"
+            value={fmtBRL(gerencial.netRevenue)}
+          />
+          <BigKPI
+            label="Lucro"
+            value={fmtBRL(gerencial.profitValue)}
+            sub={`${fmtPct(gerencial.profitPct)} de margem`}
+          />
+          <BigKPI
+            label="Pedidos"
+            value={String(gerencial.orderCount)}
+            sub={`${fmtQty(gerencial.itemCount)} itens vendidos`}
+          />
+          <BigKPI
+            label="Devoluções"
+            value={gerencial.returnsCount === 0 ? '0' : `${gerencial.returnsCount} dev.`}
+            sub={gerencial.returnsValue > 0 ? `−${fmtBRL(gerencial.returnsValue)}` : 'Nenhuma devolução'}
+          />
+          <BigKPI
+            label="Estoque"
+            value={fmtBRL(gerencial.stockBalance)}
+          />
+        </div>
+
+        <div style={{ height: '1px', background: 'linear-gradient(90deg, transparent, var(--gold), transparent)', opacity: 0.4 }} />
+
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '16px' }}>
+          {([
+            ['Descontos', fmtBRL(gerencial.discounts)],
+            ['Bonificações', fmtBRL(gerencial.bonifications)],
+            ['Títulos em Aberto', fmtBRL(gerencial.titlesOpen)],
+            ['Total a Receber', fmtBRL(gerencial.totalReceivable)],
+            ['PDV Faturamento', fmtBRL(gerencial.pdvRevenue)],
+            ['Pedidos em Aberto', fmtBRL(gerencial.openOrders)],
+          ] as [string, string][]).map(([label, value], i) => (
+            <div key={i} style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              padding: '12px 18px',
+              background: 'rgba(255,255,255,0.04)',
+              borderRadius: 'var(--radius-md)',
+              border: '1px solid rgba(255,255,255,0.07)',
+            }}>
+              <span style={{ fontSize: '13px', color: 'rgba(255,255,255,0.7)', fontWeight: 500 }}>
+                {label}
+              </span>
+              <div style={{ fontSize: '14px', fontWeight: 700, color: 'var(--gold)', fontFamily: 'var(--font-mono)' }}>
+                {value}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export default function PresentationMode() {
   const togglePresentationMode = useDashboardStore((s) => s.togglePresentationMode)
-  const report = useDashboardStore((s) => s.report)!
+  const report = useDashboardStore((s) => s.report)
+  const gerencial = useDashboardStore((s) => s.gerencial)
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -53,6 +184,12 @@ export default function PresentationMode() {
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [togglePresentationMode])
+
+  if (!report && gerencial) {
+    return <GerencialPresentation gerencial={gerencial} onClose={togglePresentationMode} />
+  }
+
+  if (!report) return null
 
   const { grandTotal, categories, company, period } = report
 
@@ -79,55 +216,8 @@ export default function PresentationMode() {
       flexDirection: 'column',
       animation: 'fadeSlideUp 0.3s ease both',
     }}>
-      {/* Header bar */}
-      <div style={{
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        padding: '20px 32px',
-        borderBottom: '1px solid rgba(201,168,76,0.2)',
-        flexShrink: 0,
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
-          <CsmLogo size={40} />
-          <div>
-            <div style={{ fontSize: '18px', fontWeight: 800, color: 'var(--gold)', letterSpacing: '-0.3px' }}>
-              {company}
-            </div>
-            <div style={{ fontSize: '12px', color: 'rgba(255,255,255,0.45)', marginTop: '2px' }}>
-              {period}
-            </div>
-          </div>
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <div style={{
-              width: '8px', height: '8px', borderRadius: '50%',
-              background: 'var(--positive)',
-              animation: 'pulse 2s ease infinite',
-            }} />
-            <span style={{ fontSize: '11px', color: 'rgba(255,255,255,0.4)' }}>ao vivo</span>
-          </div>
-          <button
-            onClick={togglePresentationMode}
-            title="Fechar apresentação (ESC)"
-            style={{
-              background: 'rgba(255,255,255,0.08)',
-              border: '1px solid rgba(255,255,255,0.15)',
-              borderRadius: 'var(--radius-sm)',
-              color: 'rgba(255,255,255,0.6)',
-              padding: '6px 14px',
-              cursor: 'pointer',
-              fontSize: '12px',
-              fontWeight: 600,
-            }}
-          >
-            ✕ ESC
-          </button>
-        </div>
-      </div>
+      <PresentationHeader company={company} period={period} onClose={togglePresentationMode} />
 
-      {/* KPI Grid */}
       <div style={{
         flex: 1,
         display: 'flex',
@@ -170,10 +260,8 @@ export default function PresentationMode() {
           />
         </div>
 
-        {/* Gold divider */}
         <div style={{ height: '1px', background: 'linear-gradient(90deg, transparent, var(--gold), transparent)', opacity: 0.4 }} />
 
-        {/* Bottom summary */}
         <div style={{
           display: 'grid',
           gridTemplateColumns: 'repeat(3, 1fr)',

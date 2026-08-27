@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { useDashboardStore } from './store/useDashboardStore'
 import ImportScreen from './components/ImportScreen'
 import Header from './components/Header'
@@ -9,6 +10,7 @@ import TabHistorico from './components/TabHistorico'
 import TabGerencial from './components/TabGerencial'
 import TabTutorial from './components/TabTutorial'
 import PresentationMode from './components/PresentationMode'
+import TourOverlay from './components/TourOverlay'
 
 const CONTENT_STYLE = {
   maxWidth: '1440px',
@@ -21,6 +23,7 @@ export default function App() {
   const gerencialViews = useDashboardStore((s) => s.gerencialViews)
   const activeTab = useDashboardStore((s) => s.activeTab)
   const isPresentationMode = useDashboardStore((s) => s.isPresentationMode)
+  const [tourActive, setTourActive] = useState(false)
 
   const hasGerencial = !!gerencial || Object.keys(gerencialViews).length > 0
 
@@ -31,15 +34,16 @@ export default function App() {
     <>
       <Header />
       <TabBar />
-      <div style={CONTENT_STYLE}>
+      <main style={CONTENT_STYLE}>
         {activeTab === 'dashboard'  && report && <TabDashboard />}
         {activeTab === 'comparacao' && report && <TabComparacao />}
         {activeTab === 'devolucoes' && report && <TabDevolucoes />}
         {activeTab === 'historico'  && report && <TabHistorico />}
         {activeTab === 'gerencial'  && hasGerencial && <TabGerencial />}
-        {activeTab === 'tutorial'   && <TabTutorial />}
-      </div>
+        {activeTab === 'tutorial'   && <TabTutorial onStartTour={() => setTourActive(true)} />}
+      </main>
       {isPresentationMode && <PresentationMode />}
+      {tourActive && <TourOverlay onClose={() => setTourActive(false)} />}
     </>
   )
 }

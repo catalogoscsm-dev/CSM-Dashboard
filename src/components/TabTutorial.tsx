@@ -1,5 +1,6 @@
-import { useState } from 'react'
-import TourOverlay from './TourOverlay'
+interface Props {
+  onStartTour: () => void
+}
 
 interface SectionCard {
   emoji: string
@@ -98,9 +99,7 @@ const TIPS = [
   { icon: '📺', text: 'Use o Modo Apresentação para exibir os números em uma TV durante reuniões' },
 ]
 
-export default function TabTutorial() {
-  const [tourActive, setTourActive] = useState(false)
-
+export default function TabTutorial({ onStartTour }: Props) {
   return (
     <div style={{ maxWidth: '1100px', margin: '0 auto', padding: '32px 24px 60px' }}>
 
@@ -130,7 +129,7 @@ export default function TabTutorial() {
           Aprenda a usar o CSM Dashboard — da importação do relatório até a análise avançada de tendências.
         </p>
         <button
-          onClick={() => setTourActive(true)}
+          onClick={onStartTour}
           style={{
             fontSize: '15px', fontWeight: 700,
             background: 'var(--gold)', color: 'var(--navy)',
@@ -275,7 +274,7 @@ export default function TabTutorial() {
           Faça o tour guiado para ver cada funcionalidade em ação enquanto navega pelo software.
         </p>
         <button
-          onClick={() => setTourActive(true)}
+          onClick={onStartTour}
           style={{
             fontSize: '14px', fontWeight: 700,
             background: 'var(--navy)', color: '#fff',
@@ -287,8 +286,6 @@ export default function TabTutorial() {
         </button>
       </div>
 
-      {/* Tour overlay */}
-      {tourActive && <TourOverlay onClose={() => setTourActive(false)} />}
     </div>
   )
 }

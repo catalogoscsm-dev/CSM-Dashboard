@@ -858,6 +858,7 @@ function KpiStrip({ rows }: { rows: GerencialViewRow[] }) {
 type SortKey = 'revenue' | 'margin' | 'profit' | 'items' | 'pctTotal' | 'name'
 
 function ViewTable({ rows, isLinhasProdutos = false }: { rows: GerencialViewRow[]; isLinhasProdutos?: boolean }) {
+  const isPdfExporting = useDashboardStore((s) => s.isPdfExporting)
   const [sortBy, setSortBy] = useState<SortKey>('revenue')
   const [sortDir, setSortDir] = useState<'desc' | 'asc'>('desc')
   const [hovered, setHovered] = useState<number | null>(null)
@@ -905,34 +906,41 @@ function ViewTable({ rows, isLinhasProdutos = false }: { rows: GerencialViewRow[
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-      {/* Campo de busca */}
-      <div style={{ position: 'relative' }}>
-        <svg style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', opacity: 0.4, pointerEvents: 'none' }}
-          width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-          <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
-        </svg>
-        <input
-          value={search}
-          onChange={e => setSearch(e.target.value)}
-          placeholder="Buscar…"
-          style={{
-            width: '100%', boxSizing: 'border-box',
-            padding: '8px 36px 8px 34px',
-            background: 'var(--surface-2)', border: '1px solid var(--border)',
-            borderRadius: 'var(--radius-md)', fontSize: '13px',
-            color: 'var(--text)', outline: 'none', fontFamily: 'var(--font-sans)',
-          }}
-        />
-        {search && (
-          <button onClick={() => setSearch('')} style={{
-            position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)',
-            background: 'none', border: 'none', cursor: 'pointer',
-            color: 'var(--text-muted)', fontSize: '18px', lineHeight: 1, padding: '0 2px',
-          }}>×</button>
-        )}
-      </div>
+      {/* Campo de busca — oculto durante exportação PDF */}
+      {!isPdfExporting && (
+        <div style={{ position: 'relative' }}>
+          <svg style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', opacity: 0.4, pointerEvents: 'none' }}
+            width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
+          </svg>
+          <input
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            placeholder="Buscar…"
+            style={{
+              width: '100%', boxSizing: 'border-box',
+              padding: '8px 36px 8px 34px',
+              background: 'var(--surface-2)', border: '1px solid var(--border)',
+              borderRadius: 'var(--radius-md)', fontSize: '13px',
+              color: 'var(--text)', outline: 'none', fontFamily: 'var(--font-sans)',
+            }}
+          />
+          {search && (
+            <button onClick={() => setSearch('')} style={{
+              position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)',
+              background: 'none', border: 'none', cursor: 'pointer',
+              color: 'var(--text-muted)', fontSize: '18px', lineHeight: 1, padding: '0 2px',
+            }}>×</button>
+          )}
+        </div>
+      )}
 
-      <div style={{ overflowX: 'auto', overflowY: 'auto', maxHeight: '520px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)' }}>
+      <div style={{
+        overflowX: 'auto',
+        overflowY: isPdfExporting ? 'visible' : 'auto',
+        maxHeight: isPdfExporting ? 'none' : '520px',
+        borderRadius: 'var(--radius-md)', border: '1px solid var(--border)',
+      }}>
         <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '700px' }}>
           <thead>
             <tr>
@@ -967,7 +975,7 @@ function ViewTable({ rows, isLinhasProdutos = false }: { rows: GerencialViewRow[
                   : idx % 2 === 0 ? 'var(--surface)' : 'var(--surface-2)'
               return (
                 <tr key={idx} onMouseEnter={() => setHovered(idx)} onMouseLeave={() => setHovered(null)}
-                  style={{ background: rowBg, animation: `fadeSlideUp 0.2s ease ${Math.min(idx, 14) * 25}ms both` }}>
+                  style={{ background: rowBg, animation: isPdfExporting ? 'none' : `fadeSlideUp 0.2s ease ${Math.min(idx, 14) * 25}ms both` }}>
                   <td style={{ ...tdStyle(), textAlign: 'center', color: 'var(--text-muted)', fontSize: '12px' }}>{idx + 1}</td>
                   <td style={{ ...tdStyle(), textAlign: 'center' }}>
                     {!row.isSubgroup && (
@@ -1123,6 +1131,7 @@ function isUnconfigured(view: GerencialView): boolean {
 }
 
 function DetailView({ view }: { view: GerencialView }) {
+  const isPdfExporting = useDashboardStore((s) => s.isPdfExporting)
   const insights = buildViewInsights(view)
   const unconfigHint = isUnconfigured(view) ? UNCONFIGURED_HINTS[view.type] : undefined
   const isLinhas = view.type === 'linhasProdutos'
@@ -1161,12 +1170,13 @@ function DetailView({ view }: { view: GerencialView }) {
 
       <KpiStrip rows={view.rows} />
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 400px', gap: '20px', alignItems: 'start' }}>
+      <div style={{ display: isPdfExporting ? 'block' : 'grid', gridTemplateColumns: '1fr 400px', gap: '20px', alignItems: 'start' }}>
         <ViewTable rows={view.rows} isLinhasProdutos={isLinhas} />
         <div style={{
           background: 'var(--surface-2)', border: '1px solid var(--border)',
           borderRadius: 'var(--radius-md)', padding: '16px',
-          position: 'sticky', top: '12px',
+          position: isPdfExporting ? 'relative' : 'sticky', top: isPdfExporting ? 'auto' : '12px',
+          marginTop: isPdfExporting ? '20px' : '0',
         }}>
           <ViewChart rows={view.rows} />
         </div>

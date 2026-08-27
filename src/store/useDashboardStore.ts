@@ -35,6 +35,7 @@ interface DashboardStore {
   activeCategory: string | null
   searchQuery: string
   showReturnsOnly: boolean
+  isPdfExporting: boolean
 
   // Navigation
   activeTab: AppTab
@@ -52,6 +53,7 @@ interface DashboardStore {
   thresholds: AlertThresholds
 
   // Core actions
+  setPdfExporting: (v: boolean) => void
   loadReport: (html: string) => void
   loadReportB: (html: string) => void
   clearReportB: () => void
@@ -95,6 +97,7 @@ export const useDashboardStore = create<DashboardStore>((set, get) => ({
   activeCategory: null,
   searchQuery: '',
   showReturnsOnly: false,
+  isPdfExporting: false,
 
   activeTab: 'dashboard',
   isPresentationMode: false,
@@ -107,6 +110,8 @@ export const useDashboardStore = create<DashboardStore>((set, get) => ({
   history: initialHistory,
   goal: initialGoal,
   thresholds: initialThresholds,
+
+  setPdfExporting: (v: boolean) => set({ isPdfExporting: v }),
 
   // ── Company ────────────────────────────────────────────────────────────
 

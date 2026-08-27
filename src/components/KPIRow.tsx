@@ -35,19 +35,34 @@ function KPICard({
       animation: `fadeSlideUp 0.5s ease ${delay}ms both`,
       transition: 'box-shadow 0.25s ease, transform 0.2s ease, border-color 0.25s ease',
       cursor: 'default',
+      position: 'relative',
+      overflow: 'hidden',
     }}
     onMouseEnter={(e) => {
-      e.currentTarget.style.boxShadow = `var(--shadow-md), 0 4px 16px ${color}28`
-      e.currentTarget.style.transform = 'translateY(-2px)'
+      e.currentTarget.style.boxShadow = `var(--shadow-md), 0 4px 24px ${color}33`
+      e.currentTarget.style.transform = 'translateY(-3px)'
       e.currentTarget.style.borderColor = color + '66'
+      const shine = e.currentTarget.querySelector('.kpi-shine') as HTMLElement
+      if (shine) shine.style.animation = 'cardShine 0.6s ease forwards'
     }}
     onMouseLeave={(e) => {
       e.currentTarget.style.boxShadow = 'var(--shadow-sm)'
       e.currentTarget.style.transform = 'translateY(0)'
       e.currentTarget.style.borderColor = 'var(--border)'
+      const shine = e.currentTarget.querySelector('.kpi-shine') as HTMLElement
+      if (shine) shine.style.animation = 'none'
     }}
     >
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
+      {/* Elemento de shine no hover */}
+      <div className="kpi-shine" style={{
+        position: 'absolute', top: 0, left: 0,
+        width: '40px', height: '100%',
+        background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.5), transparent)',
+        animation: 'none',
+        pointerEvents: 'none',
+        zIndex: 1,
+      }} />
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px', position: 'relative', zIndex: 2 }}>
         <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-dim)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
           {label}
         </span>
@@ -60,7 +75,7 @@ function KPICard({
           {icon}
         </div>
       </div>
-      <div style={{ fontSize: '24px', fontWeight: 800, color, lineHeight: 1, fontFamily: 'var(--font-mono)' }}>
+      <div style={{ fontSize: '24px', fontWeight: 800, color, lineHeight: 1, fontFamily: 'var(--font-mono)', position: 'relative', zIndex: 2 }}>
         {formatted}
       </div>
     </div>
