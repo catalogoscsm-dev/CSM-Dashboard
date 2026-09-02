@@ -138,7 +138,7 @@ export default function TourOverlay({ onClose }: Props) {
     const s = STEPS[step]
     if (!s.selector) {
       setRect(null)
-      setTooltipStyle({ top: '50%', left: '50%', transform: 'translate(-50%, -50%)' })
+      setTooltipStyle({ position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', width: 380 })
       return
     }
     const el = document.querySelector(s.selector)
@@ -216,22 +216,14 @@ export default function TourOverlay({ onClose }: Props) {
     return () => window.removeEventListener('keydown', onKey)
   }, [isLast, isFirst, onClose])
 
-  // Skip steps that need report when no report loaded
   const goNext = () => {
-    let next = step + 1
-    while (next < STEPS.length - 1 && !report && STEPS[next].tab && STEPS[next].tab !== 'tutorial') {
-      next++
-    }
+    const next = step + 1
     if (next >= STEPS.length) { onClose(); return }
     setStep(next)
   }
 
   const goPrev = () => {
-    let prev = step - 1
-    while (prev > 0 && !report && STEPS[prev].tab && STEPS[prev].tab !== 'tutorial') {
-      prev--
-    }
-    setStep(Math.max(0, prev))
+    setStep(Math.max(0, step - 1))
   }
 
   return (
