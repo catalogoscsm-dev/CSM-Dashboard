@@ -123,9 +123,7 @@ interface Props {
 
 export default function TourOverlay({ onClose }: Props) {
   const setActiveTab = useDashboardStore((s) => s.setActiveTab)
-  const report = useDashboardStore((s) => s.report)
-
-  const [step, setStep] = useState(0)
+    const [step, setStep] = useState(0)
   const [rect, setRect] = useState<SpotlightRect | null>(null)
   const [tooltipStyle, setTooltipStyle] = useState<React.CSSProperties>({})
   const tooltipRef = useRef<HTMLDivElement>(null)
